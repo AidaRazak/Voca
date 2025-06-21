@@ -55,6 +55,13 @@ export default function SearchPage() {
   };
 
   const recordAndSendToAI = () => {
+    // Use Lambda URL from environment variable
+    const lambdaUrl = process.env.NEXT_PUBLIC_LAMBDA_FUNCTION_URL;
+    if (!lambdaUrl) {
+      alert('Lambda function URL not configured. Please set NEXT_PUBLIC_LAMBDA_FUNCTION_URL in your environment variables.');
+      return;
+    }
+
     let mediaRecorder: MediaRecorder;
     let chunks: Blob[] = [];
 
@@ -73,8 +80,7 @@ export default function SearchPage() {
           if (!base64Audio) return alert('Audio conversion failed.');
 
           try {
-            // Use the mock Lambda API route for testing
-            const res = await fetch('/api/mock-lambda', {
+            const res = await fetch(lambdaUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
