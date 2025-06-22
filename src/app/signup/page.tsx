@@ -1,15 +1,18 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "../auth-context";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../auth-context';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 
-export default function LoginPage() {
+export default function SignupPage() {
   const [formData, setFormData] = useState({
+    username: '',
     email: '',
-    password: ''
+    password: '',
+    confirmPassword: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,8 +26,9 @@ export default function LoginPage() {
     }
   }, [user, router]);
 
-  // Don't render the form if the user is already logged in
+  // Redirect if already logged in
   if (user) {
+    router.push('/dashboard');
     return null;
   }
 
@@ -37,11 +41,34 @@ export default function LoginPage() {
     setError(''); // Clear error when user types
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const validateForm = () => {
+    if (!formData.username.trim()) {
+      setError('Username is required');
+      return false;
+    }
+    if (!formData.email.trim()) {
+      setError('Email is required');
+      return false;
+    }
+    if (!formData.email.includes('@')) {
+      setError('Please enter a valid email address');
+      return false;
+    }
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return false;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.email.trim() || !formData.password.trim()) {
-      setError('Please fill in all fields');
+    if (!validateForm()) {
       return;
     }
 
@@ -49,40 +76,85 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      // Create user with email and password
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
+
+      const user = userCredential.user;
+
+      // Update profile with username
+      await updateProfile(user, {
+        displayName: formData.username
+      });
+
+      // Create user document in Firestore
+      await setDoc(doc(db, 'users', user.uid), {
+        username: formData.username,
+        email: formData.email,
+        createdAt: new Date(),
+        streak: {
+          count: 0,
+          lastPlayed: null,
+          activeDays: [],
+          totalSessions: 0,
+          brandsLearned: 0,
+          averageAccuracy: 0
+        },
+        games: {
+          phonemeChallenge: { highScore: 0, gamesPlayed: 0 },
+          listenGuess: { highScore: 0, gamesPlayed: 0 },
+          pronunciationShowdown: { highScore: 0, gamesPlayed: 0 }
+        }
+      });
+
+      // Redirect to dashboard
       router.push('/dashboard');
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('Signup error:', error);
       
-      if (error.code === 'auth/user-not-found') {
-        setError('No account found with this email address');
-      } else if (error.code === 'auth/wrong-password') {
-        setError('Incorrect password');
+      if (error.code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists');
+      } else if (error.code === 'auth/weak-password') {
+        setError('Password is too weak. Please choose a stronger password');
       } else if (error.code === 'auth/invalid-email') {
         setError('Please enter a valid email address');
-      } else if (error.code === 'auth/too-many-requests') {
-        setError('Too many failed attempts. Please try again later');
       } else {
-        setError('Failed to sign in. Please check your credentials and try again.');
+        setError('Failed to create account. Please try again.');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSignupClick = () => {
-    router.push('/signup');
+  const handleLoginClick = () => {
+    router.push('/login');
   };
 
   return (
-    <div className="login-page">
-      <div className="login-container">
-        <div className="login-header">
-          <h1>Welcome Back</h1>
-          <p>Sign in to continue your pronunciation journey</p>
+    <div className="signup-page">
+      <div className="signup-container">
+        <div className="signup-header">
+          <h1>Create Your Account</h1>
+          <p>Join Voca and start mastering car brand pronunciation</p>
         </div>
 
-        <form onSubmit={handleLogin} className="login-form">
+        <form onSubmit={handleSignup} className="signup-form">
+          <div className="form-group">
+            <label htmlFor="username">Username</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
+              onChange={handleInputChange}
+              placeholder="Enter your username"
+              required
+            />
+          </div>
+
           <div className="form-group">
             <label htmlFor="email">Email</label>
             <input
@@ -109,22 +181,35 @@ export default function LoginPage() {
             />
           </div>
 
+          <div className="form-group">
+            <label htmlFor="confirmPassword">Confirm Password</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleInputChange}
+              placeholder="Confirm your password"
+              required
+            />
+          </div>
+
           {error && <div className="error-message">{error}</div>}
 
           <button 
             type="submit" 
-            className="login-button"
+            className="signup-button"
             disabled={loading}
           >
-            {loading ? 'Signing In...' : 'Sign In'}
+            {loading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 
-        <div className="signup-link">
+        <div className="login-link">
           <p>
-            Don't have an account?{' '}
-            <button onClick={handleSignupClick} className="link-button">
-              Create Account
+            Already have an account?{' '}
+            <button onClick={handleLoginClick} className="link-button">
+              Sign In
             </button>
           </p>
         </div>
@@ -137,7 +222,7 @@ export default function LoginPage() {
       </div>
 
       <style jsx>{`
-        .login-page {
+        .signup-page {
           min-height: 100vh;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           display: flex;
@@ -147,7 +232,7 @@ export default function LoginPage() {
           font-family: 'Segoe UI', sans-serif;
         }
 
-        .login-container {
+        .signup-container {
           background: rgba(255, 255, 255, 0.95);
           backdrop-filter: blur(20px);
           border-radius: 20px;
@@ -158,24 +243,24 @@ export default function LoginPage() {
           border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        .login-header {
+        .signup-header {
           text-align: center;
           margin-bottom: 2rem;
         }
 
-        .login-header h1 {
+        .signup-header h1 {
           color: #333;
           font-size: 2rem;
           font-weight: 700;
           margin-bottom: 0.5rem;
         }
 
-        .login-header p {
+        .signup-header p {
           color: #666;
           font-size: 1rem;
         }
 
-        .login-form {
+        .signup-form {
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
@@ -221,7 +306,7 @@ export default function LoginPage() {
           border: 1px solid #fed7d7;
         }
 
-        .login-button {
+        .signup-button {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
           padding: 1rem;
@@ -234,25 +319,25 @@ export default function LoginPage() {
           margin-top: 1rem;
         }
 
-        .login-button:hover:not(:disabled) {
+        .signup-button:hover:not(:disabled) {
           transform: translateY(-2px);
           box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
         }
 
-        .login-button:disabled {
+        .signup-button:disabled {
           opacity: 0.7;
           cursor: not-allowed;
           transform: none;
         }
 
-        .signup-link {
+        .login-link {
           text-align: center;
           margin-top: 2rem;
           padding-top: 2rem;
           border-top: 1px solid #e1e5e9;
         }
 
-        .signup-link p {
+        .login-link p {
           color: #666;
           margin: 0;
         }
@@ -290,12 +375,12 @@ export default function LoginPage() {
         }
 
         @media (max-width: 480px) {
-          .login-container {
+          .signup-container {
             padding: 2rem;
             margin: 1rem;
           }
 
-          .login-header h1 {
+          .signup-header h1 {
             font-size: 1.75rem;
           }
         }
