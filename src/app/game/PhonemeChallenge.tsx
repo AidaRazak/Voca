@@ -5,6 +5,7 @@ import { useAuth } from '../auth-context';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { brandsData } from './gamedata';
+import { updateUserStreak } from '../utils/streakUtils';
 
 const brandNames = Object.keys(brandsData);
 
@@ -67,7 +68,9 @@ export default function PhonemeChallenge({ onScoreUpdate }: { onScoreUpdate: (ne
     if (answered) return;
     setAnswered(true);
 
-    if (selectedOption === question?.correctAnswer) {
+    const isCorrect = selectedOption === question?.correctAnswer;
+    
+    if (isCorrect) {
       setFeedback('correct');
       const newScore = score + 1;
       setScore(newScore);
@@ -79,6 +82,15 @@ export default function PhonemeChallenge({ onScoreUpdate }: { onScoreUpdate: (ne
       }
     } else {
       setFeedback('incorrect');
+    }
+
+    // Update streak for game completion
+    if (user && question) {
+      await updateUserStreak(user.uid, {
+        accuracy: isCorrect ? 100 : 0,
+        brandName: question.brand,
+        sessionType: 'game'
+      });
     }
 
     setTimeout(() => {

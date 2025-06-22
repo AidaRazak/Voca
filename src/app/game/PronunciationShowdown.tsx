@@ -5,6 +5,7 @@ import { useAuth } from '../auth-context';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { brandsData } from './gamedata';
+import { updateUserStreak } from '../utils/streakUtils';
 
 const brandNames = Object.keys(brandsData);
 
@@ -104,6 +105,15 @@ export default function PronunciationShowdown({ onScoreUpdate }: { onScoreUpdate
           if(userDoc.exists()) {
             onScoreUpdate(userDoc.data().gameScore || 0);
           }
+        }
+
+        // Update streak for game completion
+        if (user) {
+          await updateUserStreak(user.uid, {
+            accuracy: userScore,
+            brandName: currentBrand,
+            sessionType: 'game'
+          });
         }
       } else if (pollResult.status === 'FAILED') {
         throw new Error('Analysis failed.');

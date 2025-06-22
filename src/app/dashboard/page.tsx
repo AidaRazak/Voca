@@ -10,17 +10,20 @@ export default function Dashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [gameScore, setGameScore] = useState(0);
+  const [streakCount, setStreakCount] = useState(0);
 
   useEffect(() => {
     if (user) {
-      const fetchScore = async () => {
+      const fetchUserData = async () => {
         const userDocRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(userDocRef);
         if (docSnap.exists()) {
-          setGameScore(docSnap.data().gameScore || 0);
+          const data = docSnap.data();
+          setGameScore(data.gameScore || 0);
+          setStreakCount(data.streakCount || 0);
         }
       };
-      fetchScore();
+      fetchUserData();
     }
   }, [user]);
 
@@ -43,7 +46,15 @@ export default function Dashboard() {
     <div className="dashboard-container">
       <header className="dashboard-header">
         <h1>Welcome, {user.displayName || user.email}</h1>
-        <button onClick={handleLogout} className="logout-btn">Logout</button>
+        <div className="header-right">
+          <button 
+            className="streak-badge" 
+            onClick={() => router.push('/streak')}
+          >
+            🔥 {streakCount}
+          </button>
+          <button onClick={handleLogout} className="logout-btn">Logout</button>
+        </div>
       </header>
 
       <main className="dashboard-main">
@@ -52,15 +63,11 @@ export default function Dashboard() {
           <p>Practice your car brand pronunciation and get AI feedback.</p>
         </div>
         <div className="card" onClick={() => router.push('/game')}>
-          <h2>Phoneme Challenge</h2>
+          <h2>Game Arcade</h2>
           <p>Test your knowledge in our phoneme guessing game!</p>
           <div className="score-display">
             Your Score: <strong>{gameScore}</strong>
           </div>
-        </div>
-        <div className="card" onClick={() => router.push('/streak')}>
-          <h2>View My Streak</h2>
-          <p>Check your practice streak and stay motivated.</p>
         </div>
       </main>
 
@@ -77,6 +84,28 @@ export default function Dashboard() {
           align-items: center;
           padding: 1.5rem 2rem;
           background: rgba(0,0,0,0.1);
+        }
+        .header-right {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+        .streak-badge {
+          background: rgba(255, 255, 255, 0.15);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          color: white;
+          border: none;
+          padding: 0.5rem 1rem;
+          border-radius: 20px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 1rem;
+          transition: all 0.2s ease-in-out;
+          backdrop-filter: blur(10px);
+        }
+        .streak-badge:hover {
+          background: rgba(255, 255, 255, 0.25);
+          transform: scale(1.05);
         }
         .logout-btn {
           background: white;

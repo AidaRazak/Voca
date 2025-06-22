@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/app/firebase';
+import { useAuth } from '../auth-context';
+import { updateUserStreak } from '../utils/streakUtils';
 
 // Helper icons
 const CheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>;
@@ -154,6 +156,7 @@ const FeedbackDisplay = ({ result, onTryAgain }: { result: TranscriptionResult, 
 
 export default function SearchPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [searchValue, setSearchValue] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -269,6 +272,15 @@ export default function SearchPage() {
                   
                   setFeedbackResult(processedResult);
                   setIsProcessing(false);
+
+                  // Update streak when user completes a practice session
+                  if (user && processedResult.brandFound) {
+                    await updateUserStreak(user.uid, {
+                      accuracy: processedResult.accuracy || 0,
+                      brandName: processedResult.detectedBrand,
+                      sessionType: 'practice'
+                    });
+                  }
                 } else if (pollResult.status === 'FAILED') {
                   throw new Error(`Transcription failed: ${pollResult.error || 'Unknown reason'}`);
                 } else {

@@ -5,6 +5,7 @@ import { useAuth } from '../auth-context';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { brandsData } from './gamedata';
+import { updateUserStreak } from '../utils/streakUtils';
 
 const brandNames = Object.keys(brandsData);
 
@@ -17,6 +18,7 @@ type Question = {
   brand: string;
   options: string[];
   correctAnswer: string;
+  audioUrl?: string;
 };
 
 export default function ListenGuess({ onScoreUpdate }: { onScoreUpdate: (newScore: number) => void }) {
@@ -25,6 +27,7 @@ export default function ListenGuess({ onScoreUpdate }: { onScoreUpdate: (newScor
   const [question, setQuestion] = useState<Question | null>(null);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | ''>('');
   const [answered, setAnswered] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -45,10 +48,10 @@ export default function ListenGuess({ onScoreUpdate }: { onScoreUpdate: (newScor
   const generateQuestion = () => {
     setAnswered(false);
     setFeedback('');
+    setIsPlaying(false);
 
     const randomBrandName = brandNames[Math.floor(Math.random() * brandNames.length)];
-    const correctAnswer = randomBrandName;
-
+    
     const incorrectOptions = new Set<string>();
     while (incorrectOptions.size < 2) {
       const randomIncorrect = brandNames[Math.floor(Math.random() * brandNames.length)];
@@ -58,37 +61,40 @@ export default function ListenGuess({ onScoreUpdate }: { onScoreUpdate: (newScor
     }
 
     const options = Array.from(incorrectOptions);
-    options.push(correctAnswer);
+    options.push(randomBrandName);
     options.sort(() => Math.random() - 0.5);
 
     setQuestion({
       brand: randomBrandName,
       options,
-      correctAnswer,
+      correctAnswer: randomBrandName,
     });
   };
 
-  const playSound = () => {
-    if (question) {
-      const utterance = new SpeechSynthesisUtterance(getSpokenBrand(question.brand));
-      utterance.lang = 'en-US';
-      window.speechSynthesis.speak(utterance);
-    }
+  const playAudio = () => {
+    if (!question) return;
+    
+    setIsPlaying(true);
+    
+    // Use browser's speech synthesis to pronounce the brand
+    const utterance = new SpeechSynthesisUtterance(question.brand);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.8;
+    utterance.pitch = 1;
+    
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = () => setIsPlaying(false);
+    
+    speechSynthesis.speak(utterance);
   };
-
-  useEffect(() => {
-    // Ensure sound plays only once when a new question is generated
-    if (question && !answered) {
-      // A small delay can help ensure the browser is ready
-      setTimeout(playSound, 100);
-    }
-  }, [question]);
 
   const handleAnswer = async (selectedOption: string) => {
     if (answered) return;
     setAnswered(true);
 
-    if (selectedOption === question?.correctAnswer) {
+    const isCorrect = selectedOption === question?.correctAnswer;
+    
+    if (isCorrect) {
       setFeedback('correct');
       const newScore = score + 1;
       setScore(newScore);
@@ -102,6 +108,15 @@ export default function ListenGuess({ onScoreUpdate }: { onScoreUpdate: (newScor
       setFeedback('incorrect');
     }
 
+    // Update streak for game completion
+    if (user && question) {
+      await updateUserStreak(user.uid, {
+        accuracy: isCorrect ? 100 : 0,
+        brandName: question.brand,
+        sessionType: 'game'
+      });
+    }
+
     setTimeout(() => {
       generateQuestion();
     }, 1500);
@@ -112,9 +127,15 @@ export default function ListenGuess({ onScoreUpdate }: { onScoreUpdate: (newScor
       {question ? (
         <div className="question-card">
           <p className="instruction">Listen to the pronunciation and guess the brand:</p>
-          <button onClick={playSound} className="play-sound-btn">
-            🔊 Play Sound
+          
+          <button 
+            onClick={playAudio} 
+            disabled={isPlaying}
+            className="play-sound-btn"
+          >
+            {isPlaying ? '🔊' : '🔊'}
           </button>
+          
           <div className="options-container listen-game">
             {question.options.map((option, index) => (
               <button
@@ -131,7 +152,7 @@ export default function ListenGuess({ onScoreUpdate }: { onScoreUpdate: (newScor
             ))}
           </div>
           {feedback === 'correct' && <p className="feedback-text correct">Correct! +1 Point</p>}
-          {feedback === 'incorrect' && <p className="feedback-text incorrect">The correct answer was {question.correctAnswer}</p>}
+          {feedback === 'incorrect' && <p className="feedback-text incorrect">Nice try!</p>}
         </div>
       ) : (
         <p>Loading game...</p>
