@@ -27,14 +27,21 @@ const req = https.request(options, (res) => {
   });
   
   res.on('end', () => {
-    console.log('Response body:');
+    console.log('\n=== Response Body ===');
     console.log(data);
+    console.log('\n=== End Response Body ===');
     
-    try {
-      const jsonData = JSON.parse(data);
-      console.log('Parsed JSON:', jsonData);
-    } catch (e) {
-      console.log('Not valid JSON');
+    if (data.trim()) {
+      try {
+        const jsonData = JSON.parse(data);
+        console.log('\n=== Parsed JSON ===');
+        console.log(JSON.stringify(jsonData, null, 2));
+      } catch (e) {
+        console.log('\n❌ Not valid JSON');
+        console.log('Parse error:', e.message);
+      }
+    } else {
+      console.log('\n❌ Empty response body');
     }
   });
 });
