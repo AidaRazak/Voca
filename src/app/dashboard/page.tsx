@@ -2,130 +2,122 @@
 
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../auth-context';
-import ProtectedRoute from '../components/ProtectedRoute';
+import { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
-export default function DashboardPage() {
+export default function Dashboard() {
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const [gameScore, setGameScore] = useState(0);
+
+  useEffect(() => {
+    if (user) {
+      const fetchScore = async () => {
+        const userDocRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(userDocRef);
+        if (docSnap.exists()) {
+          setGameScore(docSnap.data().gameScore || 0);
+        }
+      };
+      fetchScore();
+    }
+  }, [user]);
 
   const handleLogout = async () => {
-    await logout();
+    // Implement your logout logic here
+    console.log('Logging out...');
     router.push('/login');
   };
 
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    router.push('/login');
+    return null;
+  }
+
   return (
-    <ProtectedRoute>
-      <div className="dashboard-page">
-        <div className="header">
-          <h1 className="page-title">Welcome, {user?.email}</h1>
-          <button className="logout-btn" onClick={handleLogout}>
-            Logout
-          </button>
+    <div className="dashboard-container">
+      <header className="dashboard-header">
+        <h1>Welcome, {user.displayName || user.email}</h1>
+        <button onClick={handleLogout} className="logout-btn">Logout</button>
+      </header>
+
+      <main className="dashboard-main">
+        <div className="card" onClick={() => router.push('/search')}>
+          <h2>Practice Pronunciation</h2>
+          <p>Practice your car brand pronunciation and get AI feedback.</p>
         </div>
-
-        <div className="card-container">
-          <div className="card" onClick={() => router.push('/search')}>
-            <h3>🔍 Search Brands</h3>
-            <p>Find and learn car brand pronunciations</p>
-          </div>
-
-          <div className="card" onClick={() => router.push('/streak')}>
-            <h3>🔥 Your Streak</h3>
-            <p>Track your learning progress</p>
-          </div>
-
-          <div className="card" onClick={() => router.push('/feedback')}>
-            <h3>📊 AI Feedback</h3>
-            <p>Get pronunciation feedback</p>
+        <div className="card" onClick={() => router.push('/game')}>
+          <h2>Phoneme Challenge</h2>
+          <p>Test your knowledge in our phoneme guessing game!</p>
+          <div className="score-display">
+            Your Score: <strong>{gameScore}</strong>
           </div>
         </div>
+        <div className="card" onClick={() => router.push('/streak')}>
+          <h2>View My Streak</h2>
+          <p>Check your practice streak and stay motivated.</p>
+        </div>
+      </main>
 
-        <style jsx>{`
-          .dashboard-page {
-            min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 2rem;
-            font-family: 'Segoe UI', sans-serif;
-            color: white;
-          }
-
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 3rem;
-          }
-
-          .page-title {
-            font-size: 2rem;
-            font-weight: 600;
-            margin: 0;
-          }
-
-          .logout-btn {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-          }
-
-          .logout-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-          }
-
-          .card-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            max-width: 1200px;
-            margin: 0 auto;
-          }
-
-          .card {
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 20px;
-            backdrop-filter: blur(14px);
-            padding: 2rem;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-          }
-
-          .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-            border-color: rgba(255, 255, 255, 0.3);
-          }
-
-          .card h3 {
-            margin: 0 0 1rem 0;
-            font-size: 1.5rem;
-            font-weight: 600;
-          }
-
-          .card p {
-            margin: 0;
-            opacity: 0.8;
-            line-height: 1.5;
-          }
-
-          @media (max-width: 768px) {
-            .header {
-              flex-direction: column;
-              gap: 1rem;
-              text-align: center;
-            }
-
-            .card-container {
-              grid-template-columns: 1fr;
-            }
-          }
-        `}</style>
-      </div>
-    </ProtectedRoute>
+      <style jsx>{`
+        .dashboard-container {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          font-family: 'Segoe UI', sans-serif;
+        }
+        .dashboard-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1.5rem 2rem;
+          background: rgba(0,0,0,0.1);
+        }
+        .logout-btn {
+          background: white;
+          color: #764ba2;
+          border: none;
+          padding: 0.6rem 1rem;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+        }
+        .dashboard-main {
+          padding: 2rem;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 1.5rem;
+        }
+        .card {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 15px;
+          padding: 2rem;
+          cursor: pointer;
+          transition: all 0.2s ease-in-out;
+          border: 1px solid rgba(255,255,255,0.18);
+        }
+        .card:hover {
+          transform: translateY(-5px);
+          background: rgba(255, 255, 255, 0.15);
+        }
+        .card h2 {
+          margin-bottom: 0.5rem;
+        }
+        .score-display {
+          margin-top: 1rem;
+          font-size: 1.1rem;
+          font-weight: 500;
+          background-color: rgba(255,255,255,0.2);
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          display: inline-block;
+        }
+      `}</style>
+    </div>
   );
-} 
+}
