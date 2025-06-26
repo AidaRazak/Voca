@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../auth-context';
 import { useEffect, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
@@ -17,9 +17,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      const fetchUserData = async () => {
-        const userDocRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(userDocRef);
+      const userDocRef = doc(db, 'users', user.uid);
+      
+      const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setGameScore(data.gameScore || 0);
@@ -28,8 +28,9 @@ export default function Dashboard() {
         } else {
           setUsername(user.displayName || 'User');
         }
-      };
-      fetchUserData();
+      });
+
+      return () => unsubscribe();
     }
   }, [user]);
 

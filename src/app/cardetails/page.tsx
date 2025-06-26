@@ -2,26 +2,44 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export default function CarDetailsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [brand, setBrand] = useState<string>('');
   const [brandData, setBrandData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const brandParam = searchParams.get('brand');
     if (brandParam) {
-      setBrand(decodeURIComponent(brandParam));
-      // Here you would fetch brand data from Firebase
-      // For now, we'll use mock data
-      setBrandData({
-        name: decodeURIComponent(brandParam),
-        pronunciation: 'Mock pronunciation',
-        description: 'This is a car brand description.',
-        founded: '1900s',
-        country: 'Various'
-      });
+      const brandName = decodeURIComponent(brandParam).toLowerCase();
+      setBrand(brandName);
+      setLoading(true);
+      setError(null);
+      setBrandData(null);
+      const fetchBrand = async () => {
+        try {
+          const docRef = doc(db, 'brands', brandName);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setBrandData(docSnap.data());
+            setError(null);
+          } else {
+            setBrandData(null);
+            setError('Brand not found in database.');
+          }
+        } catch (err) {
+          setBrandData(null);
+          setError('Error fetching brand data.');
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchBrand();
     }
   }, [searchParams]);
 
@@ -32,7 +50,7 @@ export default function CarDetailsPage() {
       <div className="car-details-page">
         <button className="back-btn" onClick={handleBack}>←</button>
         <div className="error-container">
-          <h1>Brand Not Found</h1>
+          <h1>No Brand Selected</h1>
           <button onClick={handleBack}>Go Back</button>
         </div>
       </div>
@@ -42,26 +60,46 @@ export default function CarDetailsPage() {
   return (
     <div className="car-details-page">
       <button className="back-btn" onClick={handleBack}>←</button>
-      <h1 className="page-title">{brand}</h1>
+      <h1 className="page-title">{brand.charAt(0).toUpperCase() + brand.slice(1)}</h1>
 
       <div className="details-container">
         <div className="brand-card">
           <h3>Brand Information</h3>
-          <div className="info-grid">
-            <div className="info-item">
-              <label>Pronunciation:</label>
-              <span>{brandData?.pronunciation}</span>
-            </div>
-            <div className="info-item">
-              <label>Founded:</label>
-              <span>{brandData?.founded}</span>
-            </div>
-            <div className="info-item">
-              <label>Country:</label>
-              <span>{brandData?.country}</span>
-            </div>
-          </div>
-          <p className="description">{brandData?.description}</p>
+          {loading && <div className="brand-loading">Loading brand data...</div>}
+          {error && <div className="brand-error">{error}</div>}
+          {!loading && !error && brandData && (
+            <>
+              <div className="info-grid">
+                {brandData.phonetics && (
+                  <div className="info-item">
+                    <label>Phonetics:</label>
+                    <span>{brandData.phonetics}</span>
+                  </div>
+                )}
+                {brandData.phonemes && (
+                  <div className="info-item">
+                    <label>Phonemes:</label>
+                    <span>{brandData.phonemes}</span>
+                  </div>
+                )}
+                {brandData.founded && (
+                  <div className="info-item">
+                    <label>Founded:</label>
+                    <span>{brandData.founded}</span>
+                  </div>
+                )}
+                {brandData.country && (
+                  <div className="info-item">
+                    <label>Country:</label>
+                    <span>{brandData.country}</span>
+                  </div>
+                )}
+              </div>
+              {brandData.description && (
+                <p className="description">{brandData.description}</p>
+              )}
+            </>
+          )}
         </div>
 
         <div className="action-buttons">
@@ -74,7 +112,7 @@ export default function CarDetailsPage() {
       <style jsx>{`
         .car-details-page {
           height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, rgb(224, 226, 235) 0%,rgb(250, 250, 250) 100%);
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -118,7 +156,7 @@ export default function CarDetailsPage() {
         }
 
         .brand-card {
-          background: rgba(255, 255, 255, 0.08);
+          background: rgba(123, 128, 228, 0.95);
           border-radius: 20px;
           backdrop-filter: blur(14px);
           padding: 2rem;
@@ -132,6 +170,28 @@ export default function CarDetailsPage() {
           letter-spacing: 0.5px;
         }
 
+        .brand-loading {
+          color: #ffe066;
+          font-size: 1.1rem;
+          margin-bottom: 1rem;
+        }
+        .brand-error {
+          color: #ff6b6b;
+          background: #fff0f3;
+          border-radius: 8px;
+          padding: 0.7rem 1rem;
+          font-weight: 500;
+          font-size: 1.05rem;
+          margin-bottom: 1rem;
+        }
+        .brand-gameclue {
+          margin-top: 1.2rem;
+          font-size: 1.08rem;
+          color: #ffe066;
+          background: #2d3250;
+          border-radius: 10px;
+          padding: 0.7rem 1.1rem;
+        }
         .info-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

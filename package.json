@@ -11,7 +11,7 @@
   "dependencies": {
     "aws-sdk": "^2.1691.0",
     "firebase": "11.8.1",
-    "firebase-admin": "13.4.0",
+    "firebase-admin": "^13.4.0",
     "next": "15.3.1",
     "node-fetch": "^2.7.0",
     "react": "19.1.0",

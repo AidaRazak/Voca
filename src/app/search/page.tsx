@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '@/app/firebase';
 import { useAuth } from '../auth-context';
 import { updateUserStreak } from '../utils/streakUtils';
@@ -162,23 +162,63 @@ export default function SearchPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [feedbackResult, setFeedbackResult] = useState<TranscriptionResult | null>(null);
+  const [brandData, setBrandData] = useState<any>(null);
+  const [brandError, setBrandError] = useState<string | null>(null);
+  // Dropdown state
+  const [allBrands, setAllBrands] = useState<string[]>([]);
+  const [dropdownVisible, setDropdownVisible] = useState(false);
+  const [filteredBrands, setFilteredBrands] = useState<string[]>([]);
+
+  // Fetch all brand names on mount
+  useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        const brandsCol = collection(db, 'brands');
+        const brandsSnap = await getDocs(brandsCol);
+        const names = brandsSnap.docs.map(doc => doc.id);
+        setAllBrands(names);
+      } catch (err) {
+        // ignore for now
+      }
+    };
+    fetchBrands();
+  }, []);
+
+  // Filter brands as user types
+  useEffect(() => {
+    if (searchValue.trim()) {
+      const val = searchValue.trim().toLowerCase();
+      setFilteredBrands(
+        allBrands.filter(b => b.toLowerCase().includes(val)).slice(0, 8)
+      );
+      setDropdownVisible(true);
+    } else {
+      setFilteredBrands([]);
+      setDropdownVisible(false);
+    }
+  }, [searchValue, allBrands]);
 
   const handleBack = () => router.push('/dashboard');
 
   const searchCar = async (brand: string) => {
     const trimmed = brand.trim().toLowerCase();
+    setBrandData(null);
+    setBrandError(null);
     if (!trimmed) return alert('Please enter a car brand name.');
     try {
       const docRef = doc(db, 'brands', trimmed);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        router.push(`/cardetails?brand=${encodeURIComponent(trimmed)}`);
+        setBrandData(docSnap.data());
+        setBrandError(null);
       } else {
-        alert('Brand not found in database.');
+        setBrandData(null);
+        setBrandError('Brand not found in database.');
       }
     } catch (err) {
       console.error('Error fetching from Firestore:', err);
-      alert('Something went wrong.');
+      setBrandData(null);
+      setBrandError('Something went wrong.');
     }
   };
 
@@ -328,7 +368,7 @@ export default function SearchPage() {
         <FeedbackDisplay result={feedbackResult} onTryAgain={handleTryAgain} />
       ) : (
         <>
-          <h1 className="page-title">Voca</h1>
+          {!brandData && <h1 className="page-title">Voca</h1>}
           <div className="card-container">
             <div className="card">
               <h3>Say Brand</h3>
@@ -347,13 +387,62 @@ export default function SearchPage() {
 
             <div className="card">
               <h3>Type Brand</h3>
-              <input
-                type="text"
-                placeholder="e.g. Tesla"
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-              />
+              <div className={`input-dropdown-wrapper${dropdownVisible && filteredBrands.length > 0 ? ' dropdown-open' : ''}`}>
+                <input
+                  type="text"
+                  placeholder="e.g. Tesla"
+                  value={searchValue}
+                  onChange={(e) => {
+                    setSearchValue(e.target.value);
+                    setBrandData(null);
+                    setBrandError(null);
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') searchCar(searchValue); }}
+                  onFocus={() => { if (searchValue.trim()) setDropdownVisible(true); }}
+                  onBlur={() => setTimeout(() => setDropdownVisible(false), 150)}
+                />
+                {/* Dropdown for matching brands */}
+                {dropdownVisible && filteredBrands.length > 0 && (
+                  <ul className="brand-dropdown">
+                    {filteredBrands.map((b) => (
+                      <li
+                        key={b}
+                        onMouseDown={async () => {
+                          setSearchValue(b);
+                          setDropdownVisible(false);
+                          await searchCar(b);
+                        }}
+                      >
+                        {b.charAt(0).toUpperCase() + b.slice(1)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <button onClick={() => searchCar(searchValue)}>Search</button>
+              {brandError && (
+                <div className="brand-error">{brandError}</div>
+              )}
+              {brandData && (
+                <div className="brand-details-card">
+                  <div className="brand-header">
+                    <h2 className="brand-title">{brandData.name || searchValue}</h2>
+                  </div>
+                  <div className="brand-info-row">
+                    <span className="brand-label">Phonemes:</span>
+                    <span className="brand-value">{brandData.phonemes || '-'}</span>
+                  </div>
+                  <div className="brand-info-row">
+                    <span className="brand-label">Country:</span>
+                    <span className="brand-value">{brandData.country || '-'}</span>
+                  </div>
+                  <div className="brand-info-row">
+                    <button className="more-details-btn" onClick={() => router.push(`/cardetails?brand=${encodeURIComponent(brandData.name || searchValue)}`)}>
+                      Click for more
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>
@@ -362,13 +451,13 @@ export default function SearchPage() {
       <style jsx>{`
         .search-page {
           min-height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
           display: flex;
           flex-direction: column;
           align-items: center;
           padding: 2rem;
-          font-family: 'Segoe UI', sans-serif;
-          color: white;
+          font-family: 'Inter', 'Fira Sans', 'Avenir', 'Helvetica Neue', Arial, sans-serif;
+          color: #232946;
           transition: all 0.5s ease;
         }
 
@@ -764,6 +853,145 @@ export default function SearchPage() {
           .card, .grid-item {
             padding: 1.5rem;
           }
+        }
+
+        .brand-details-card {
+          margin-top: 1.5rem;
+          background: linear-gradient(120deg, #f8fafc 60%, #e0e7ff 100%);
+          border-radius: 18px;
+          box-shadow: 0 4px 24px rgba(44, 62, 80, 0.08);
+          padding: 2rem 2.5rem 1.5rem 2.5rem;
+          max-width: 420px;
+          width: 100%;
+          border: 1.5px solid #e0e7ff;
+          display: flex;
+          flex-direction: column;
+          gap: 0.7rem;
+          font-family: 'Fira Sans', 'Avenir', Arial, sans-serif;
+        }
+        .brand-header {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          margin-bottom: 0.7rem;
+        }
+        .brand-title {
+          font-size: 2.1rem;
+          font-weight: 700;
+          letter-spacing: 0.03em;
+          color: #232946;
+          text-shadow: 0 2px 8px rgba(44,62,80,0.04);
+        }
+        .brand-info-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.4rem 0;
+          border-bottom: 1px dashed #d1d5db;
+        }
+        .brand-label {
+          font-size: 1rem;
+          color: #6b7280;
+          font-weight: 500;
+        }
+        .brand-value {
+          font-size: 1.08rem;
+          color: #232946;
+          font-weight: 600;
+        }
+        .brand-description {
+          margin-top: 1.1rem;
+          font-size: 1.08rem;
+          color: #3b3b3b;
+          background: #f3f4f6;
+          border-radius: 10px;
+          padding: 0.9rem 1.1rem;
+          font-style: italic;
+        }
+        .brand-error {
+          margin-top: 1.2rem;
+          color: #e63946;
+          background: #fff0f3;
+          border-radius: 8px;
+          padding: 0.7rem 1rem;
+          font-weight: 500;
+          font-size: 1.05rem;
+        }
+        @media (max-width: 600px) {
+          .brand-details-card {
+            padding: 1.2rem 0.7rem 1.2rem 0.7rem;
+          }
+          .brand-title {
+            font-size: 1.3rem;
+          }
+        }
+        .input-dropdown-wrapper {
+          position: relative;
+          width: 100%;
+          max-width: 300px;
+          margin: 0 auto;
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .input-dropdown-wrapper input[type="text"] {
+          border-radius: 12px;
+          transition: border-radius 0.15s;
+        }
+        .input-dropdown-wrapper.dropdown-open input[type="text"] {
+          border-top-left-radius: 12px;
+          border-top-right-radius: 12px;
+          border-bottom-left-radius: 0;
+          border-bottom-right-radius: 0;
+        }
+        .brand-dropdown {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 100%;
+          z-index: 10;
+          background: #fff;
+          color: #232946;
+          width: 100%;
+          border-radius: 0 0 12px 12px;
+          box-shadow: 0 8px 24px rgba(44, 62, 80, 0.13);
+          list-style: none;
+          padding: 0.3rem 0;
+          border: 1px solid #e0e7ff;
+          font-family: 'Fira Sans', 'Avenir', Arial, sans-serif;
+          max-height: 220px;
+          overflow-y: auto;
+          margin-top: 0;
+          border-top: none;
+          border-top-left-radius: 0;
+          border-top-right-radius: 0;
+        }
+        .brand-dropdown li {
+          padding: 0.7rem 1.2rem;
+          cursor: pointer;
+          transition: background 0.18s;
+        }
+        .brand-dropdown li:hover {
+          background: #e0e7ff;
+        }
+        .card {
+          position: relative;
+        }
+        .more-details-btn {
+          margin-top: 1.2rem;
+          background: #232946;
+          color: #fff;
+          font-weight: 600;
+          padding: 0.7rem 1.7rem;
+          border-radius: 10px;
+          border: none;
+          cursor: pointer;
+          font-size: 1rem;
+          transition: background 0.2s, transform 0.2s;
+        }
+        .more-details-btn:hover {
+          background: #3b3b3b;
+          transform: scale(1.04);
         }
       `}</style>
     </div>

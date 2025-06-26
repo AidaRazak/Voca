@@ -21,6 +21,8 @@ serviceAccountKey.json
 serviceAccountKey.template.json
 firebase-debug.log
 firebase-debug.*.log
+brands-data/serviceAccountKey.json
+
 
 # AWS
 .aws/
