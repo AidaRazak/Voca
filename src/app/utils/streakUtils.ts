@@ -14,6 +14,10 @@ export const updateUserStreak = async (userId: string, updateData: StreakUpdateD
     
     if (!userDoc.exists()) {
       // Create new user document with initial streak data
+      const accuracyByBrand: any = {};
+      if (updateData.brandName && updateData.accuracy !== undefined) {
+        accuracyByBrand[updateData.brandName] = [updateData.accuracy];
+      }
       await updateDoc(userDocRef, {
         streakCount: 1,
         lastPlayedDate: new Date().toISOString().split('T')[0],
@@ -21,7 +25,9 @@ export const updateUserStreak = async (userId: string, updateData: StreakUpdateD
         totalSessions: 1,
         brandsLearned: updateData.brandName ? 1 : 0,
         averageAccuracy: updateData.accuracy || 0,
-        gameScore: 0
+        gameScore: 0,
+        learnedBrands: updateData.brandName ? [updateData.brandName] : [],
+        accuracyByBrand
       });
       return;
     }
@@ -35,6 +41,8 @@ export const updateUserStreak = async (userId: string, updateData: StreakUpdateD
     let newTotalSessions = userData.totalSessions || 0;
     let newBrandsLearned = userData.brandsLearned || 0;
     let newAverageAccuracy = userData.averageAccuracy || 0;
+    let learnedBrands = userData.learnedBrands || [];
+    let accuracyByBrand = userData.accuracyByBrand || {};
     
     // Check if user already played today
     const alreadyPlayedToday = newActiveDays.includes(today);
@@ -55,10 +63,16 @@ export const updateUserStreak = async (userId: string, updateData: StreakUpdateD
       
       // Update brands learned if new brand
       if (updateData.brandName) {
-        const learnedBrands = userData.learnedBrands || [];
         if (!learnedBrands.includes(updateData.brandName)) {
           learnedBrands.push(updateData.brandName);
           newBrandsLearned = learnedBrands.length;
+        }
+        // Update accuracyByBrand
+        if (updateData.accuracy !== undefined) {
+          if (!accuracyByBrand[updateData.brandName]) {
+            accuracyByBrand[updateData.brandName] = [];
+          }
+          accuracyByBrand[updateData.brandName].push(updateData.accuracy);
         }
       }
       
@@ -77,7 +91,8 @@ export const updateUserStreak = async (userId: string, updateData: StreakUpdateD
       totalSessions: newTotalSessions,
       brandsLearned: newBrandsLearned,
       averageAccuracy: newAverageAccuracy,
-      learnedBrands: userData.learnedBrands || []
+      learnedBrands,
+      accuracyByBrand
     });
     
   } catch (error) {

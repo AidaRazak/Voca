@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth } from '../../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -27,31 +29,43 @@ export default function AdminSignIn() {
     setAdminLoading(true);
     setAdminError('');
     setDebugInfo('');
-    
     try {
-      setDebugInfo('Checking admin credentials in Firestore...');
-      
-      // Use the original Firestore-only authentication method
+      setDebugInfo('Signing in with Firebase Auth...');
+      // 1. Sign in with Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, adminForm.email, adminForm.password);
+      const user = userCredential.user;
+      setDebugInfo('Firebase Auth successful, checking admin status...');
+      // 2. Check if user is in admins collection
       const adminsRef = collection(db, 'admins');
-      const q = query(adminsRef, where('email', '==', adminForm.email), where('password', '==', adminForm.password));
+      const q = query(adminsRef, where('email', '==', adminForm.email));
       const querySnapshot = await getDocs(q);
-      
       if (!querySnapshot.empty) {
-        setDebugInfo('Admin credentials verified, redirecting to dashboard...');
-        // Store admin session in localStorage for the admin dashboard to check
+        setDebugInfo('Admin status confirmed, redirecting...');
+        // Store admin session in localStorage
         localStorage.setItem('adminSession', JSON.stringify({
           email: adminForm.email,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          uid: user.uid
         }));
         router.push('/admin-dashboard');
       } else {
-        setDebugInfo('No admin found with these credentials');
-        setAdminError('Invalid admin credentials');
+        setDebugInfo('Not an admin, signing out...');
+        setAdminError('Access denied. You are not authorized as an admin.');
+        await signOut(auth);
       }
     } catch (error: any) {
-      console.error('Admin login error:', error);
-      setDebugInfo(`Error: ${error.message}`);
-      setAdminError('Error checking admin credentials. Please try again.');
+      setDebugInfo('Firebase Auth failed');
+      if (error.code === 'auth/user-not-found') {
+        setAdminError('No admin account found with this email address');
+      } else if (error.code === 'auth/wrong-password') {
+        setAdminError('Incorrect password');
+      } else if (error.code === 'auth/invalid-email') {
+        setAdminError('Please enter a valid email address');
+      } else if (error.code === 'auth/too-many-requests') {
+        setAdminError('Too many failed attempts. Please try again later');
+      } else {
+        setAdminError('Failed to sign in. Please check your credentials and try again.');
+      }
     } finally {
       setAdminLoading(false);
     }

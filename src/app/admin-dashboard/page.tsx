@@ -3,6 +3,20 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from '../firebase';
+import brandsData from '../data/brands.json';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -10,37 +24,36 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(true);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editUser, setEditUser] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ username: '', email: '' });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [brandStats, setBrandStats] = useState<any[]>([]);
+  const [brandSearch, setBrandSearch] = useState('');
+  const [overallUsage, setOverallUsage] = useState(0);
 
-  // Check if user is authenticated as admin
+  // Check if user is authenticated as admin (Firebase Auth + localStorage)
   useEffect(() => {
-    const checkAdminSession = () => {
-      try {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Check localStorage for admin session
         const adminSession = localStorage.getItem('adminSession');
         if (adminSession) {
           const session = JSON.parse(adminSession);
-          const now = Date.now();
-          const sessionAge = now - session.timestamp;
-          
-          // Check if session is less than 24 hours old
-          if (sessionAge < 24 * 60 * 60 * 1000) {
+          if (session.uid === user.uid) {
             setIsAdmin(true);
             setAdminLoading(false);
-          } else {
-            // Session expired
-            localStorage.removeItem('adminSession');
-            router.push('/admin-dashboard/signin');
+            return;
           }
-        } else {
-          // No admin session
-          router.push('/admin-dashboard/signin');
         }
-      } catch (error) {
-        console.error('Error checking admin session:', error);
-        router.push('/admin-dashboard/signin');
       }
-    };
-
-    checkAdminSession();
+      // Not authenticated as admin
+      setIsAdmin(false);
+      setAdminLoading(false);
+      router.push('/admin-dashboard/signin');
+    });
+    return () => unsubscribe();
   }, [router]);
 
   // Fetch users only if admin is authenticated
@@ -62,9 +75,84 @@ export default function AdminDashboard() {
     }
   }, [isAdmin]);
 
+  useEffect(() => {
+    if (isAdmin && users.length > 0) {
+      let totalPracticedUsers = new Set();
+      const stats = brandsData.map((brand: any) => {
+        let practiced = 0;
+        let correct = 0;
+        let totalAccuracy = 0;
+        let accuracyCount = 0;
+        users.forEach((user: any) => {
+          if (user.learnedBrands && user.learnedBrands.includes(brand.name)) {
+            practiced++;
+            totalPracticedUsers.add(user.id);
+            if (user.accuracyByBrand && user.accuracyByBrand[brand.name]) {
+              const accArr = user.accuracyByBrand[brand.name];
+              accArr.forEach((acc: number) => {
+                totalAccuracy += acc;
+                accuracyCount++;
+                if (acc === 100) correct++;
+              });
+            }
+          }
+        });
+        const avgAccuracy = accuracyCount > 0 ? Math.round(totalAccuracy / accuracyCount) : 0;
+        const percentPracticed = users.length > 0 ? Math.round((practiced / users.length) * 100) : 0;
+        return {
+          name: brand.name,
+          logoUrl: brand.logoUrl,
+          practiced,
+          correct,
+          percentPracticed,
+          avgAccuracy
+        };
+      });
+      setBrandStats(stats);
+      setOverallUsage(users.length > 0 ? Math.round((totalPracticedUsers.size / users.length) * 100) : 0);
+    }
+  }, [isAdmin, users]);
+
   const handleEdit = (userId: string) => {
-    // TODO: Implement edit username modal
-    alert('Edit user: ' + userId);
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      setEditUser(user);
+      setEditForm({ username: user.username || '', email: user.email || '' });
+      setEditError('');
+      setEditModalOpen(true);
+    }
+  };
+
+  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditSave = async () => {
+    if (!editForm.username.trim() || !editForm.email.trim()) {
+      setEditError('Username and email are required.');
+      return;
+    }
+    setEditLoading(true);
+    setEditError('');
+    try {
+      await updateDoc(doc(db, 'users', editUser.id), {
+        username: editForm.username,
+        email: editForm.email
+      });
+      setUsers(users.map(u => u.id === editUser.id ? { ...u, username: editForm.username, email: editForm.email } : u));
+      setEditModalOpen(false);
+      setEditUser(null);
+    } catch (error) {
+      setEditError('Failed to update user.');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditModalOpen(false);
+    setEditUser(null);
   };
 
   const handleResetPassword = (email: string) => {
@@ -89,9 +177,51 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('adminSession');
+    await signOut(auth);
     router.push('/admin-dashboard/signin');
+  };
+
+  const filteredBrandStats = brandStats.filter(brand =>
+    brand.name.toLowerCase().includes(brandSearch.toLowerCase())
+  );
+
+  // Chart data
+  const chartData = {
+    labels: filteredBrandStats.map(b => b.name),
+    datasets: [
+      {
+        label: 'Users Practiced',
+        data: filteredBrandStats.map(b => b.practiced),
+        backgroundColor: 'rgba(118, 75, 162, 0.7)',
+      },
+      {
+        label: 'Avg Accuracy',
+        data: filteredBrandStats.map(b => b.avgAccuracy),
+        backgroundColor: 'rgba(255, 215, 0, 0.7)',
+        yAxisID: 'y1',
+      }
+    ]
+  };
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' as const },
+      title: { display: true, text: 'Brand Practice & Accuracy' },
+      tooltip: { mode: 'index' as const, intersect: false }
+    },
+    scales: {
+      y: { beginAtZero: true, title: { display: true, text: 'Users Practiced' } },
+      y1: {
+        beginAtZero: true,
+        position: 'right' as const,
+        title: { display: true, text: 'Avg Accuracy (%)' },
+        grid: { drawOnChartArea: false },
+        min: 0,
+        max: 100
+      }
+    }
   };
 
   // Show loading while checking admin status
@@ -116,43 +246,92 @@ export default function AdminDashboard() {
         <h1 className="admin-title">Admin Dashboard</h1>
         <p className="admin-welcome">Welcome, Admin! Here you can manage Voca's data and users.</p>
         <div className="admin-section">
-          <h2>Users Management</h2>
+          <h2>Brand History</h2>
+          <div className="overall-usage-row">
+            <span><b>Overall User Usage:</b> {overallUsage}% of users have practiced at least one brand</span>
+          </div>
+          <input
+            type="text"
+            className="brand-search-input"
+            placeholder="Search brand..."
+            value={brandSearch}
+            onChange={e => setBrandSearch(e.target.value)}
+            style={{ margin: '1rem 0', padding: '0.7rem', borderRadius: '8px', border: '1.5px solid #e0e7ff', width: '100%', maxWidth: 320 }}
+          />
+          <div className="brand-history-chart">
+            <Bar data={chartData} options={chartOptions} height={320} />
+          </div>
+          <h2 style={{marginTop: '2rem'}}>Users Management</h2>
           {loading ? (
             <div className="loading-users">Loading users...</div>
           ) : (
-            <div className="users-table-wrapper">
-              <table className="users-table">
-                <thead>
-                  <tr>
-                    <th>Username</th>
-                    <th>Email</th>
-                    <th>Streak</th>
-                    <th>Score</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(user => (
-                    <tr key={user.id} className={user.deactivated ? 'deactivated-row' : ''}>
-                      <td>{user.username || '—'}</td>
-                      <td>{user.email}</td>
-                      <td>{user.streakCount ?? user.streak?.count ?? 0}</td>
-                      <td>{user.gameScore ?? 0}</td>
-                      <td>
-                        <button className="action-btn edit" onClick={() => handleEdit(user.id)}>Edit</button>
-                        <button className="action-btn reset" onClick={() => handleResetPassword(user.email)}>Reset Password</button>
-                        <button className="action-btn deactivate" onClick={() => handleDeactivate(user.id)}>{user.deactivated ? 'Activate' : 'Deactivate'}</button>
-                        <button className="action-btn delete" onClick={() => handleDelete(user.id)}>Delete</button>
-                      </td>
+            <div className="users-table-scroll">
+              <div className="users-table-wrapper">
+                <table className="users-table">
+                  <thead>
+                    <tr>
+                      <th>Username</th>
+                      <th>Email</th>
+                      <th>Streak</th>
+                      <th>Score</th>
+                      <th>Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {users.map(user => (
+                      <tr key={user.id} className={user.deactivated ? 'deactivated-row' : ''}>
+                        <td>{user.username || '—'}</td>
+                        <td>{user.email}</td>
+                        <td>{user.streakCount ?? user.streak?.count ?? 0}</td>
+                        <td>{user.gameScore ?? 0}</td>
+                        <td>
+                          <button className="action-btn edit" onClick={() => handleEdit(user.id)}>Edit</button>
+                          <button className="action-btn delete" onClick={() => handleDelete(user.id)}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
         <button className="admin-logout-btn" onClick={handleLogout}>Logout</button>
       </div>
+      {editModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Edit User</h3>
+            <div className="modal-form-group">
+              <label>Username</label>
+              <input
+                type="text"
+                name="username"
+                value={editForm.username}
+                onChange={handleEditFormChange}
+                required
+              />
+            </div>
+            <div className="modal-form-group">
+              <label>Email</label>
+              <input
+                type="email"
+                name="email"
+                value={editForm.email}
+                onChange={handleEditFormChange}
+                required
+              />
+            </div>
+            {editError && <div className="modal-error">{editError}</div>}
+            <div className="modal-actions">
+              <button onClick={handleEditSave} disabled={editLoading} className="modal-save-btn">
+                {editLoading ? 'Saving...' : 'Save'}
+              </button>
+              <button onClick={handleEditCancel} className="modal-cancel-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
       <style jsx>{`
         .admin-dashboard-page {
           min-height: 100vh;
@@ -195,6 +374,25 @@ export default function AdminDashboard() {
           width: 100%;
           margin-bottom: 2.5rem;
           border: 1.5px solid #e0e7ff;
+        }
+        .overall-usage-row {
+          margin-bottom: 0.5rem;
+          font-size: 1.08rem;
+          color: #232946;
+        }
+        .brand-search-input {
+          font-size: 1rem;
+        }
+        .brand-history-chart {
+          background: #fff;
+          border-radius: 12px;
+          padding: 1.5rem 1rem 1rem 1rem;
+          margin-bottom: 2rem;
+          box-shadow: 0 2px 8px rgba(44,62,80,0.07);
+        }
+        .users-table-scroll {
+          max-height: 400px;
+          overflow-y: auto;
         }
         .users-table-wrapper {
           overflow-x: auto;
@@ -294,6 +492,76 @@ export default function AdminDashboard() {
             padding: 0.7rem 0.5rem;
             font-size: 0.95rem;
           }
+        }
+        .modal-overlay {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+        .modal-content {
+          background: #fff;
+          border-radius: 16px;
+          padding: 2rem 2rem 1.5rem 2rem;
+          min-width: 320px;
+          max-width: 90vw;
+          box-shadow: 0 8px 32px rgba(44,62,80,0.18);
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .modal-form-group {
+          margin-bottom: 1.2rem;
+          display: flex;
+          flex-direction: column;
+        }
+        .modal-form-group label {
+          font-weight: 600;
+          margin-bottom: 0.4rem;
+        }
+        .modal-form-group input {
+          padding: 0.7rem;
+          border-radius: 8px;
+          border: 1.5px solid #e0e7ff;
+          font-size: 1rem;
+        }
+        .modal-error {
+          color: #e53e3e;
+          background: #fee;
+          border-radius: 8px;
+          padding: 0.7rem;
+          margin-bottom: 1rem;
+          font-size: 0.95rem;
+        }
+        .modal-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 1rem;
+        }
+        .modal-save-btn {
+          background: #764ba2;
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 0.7rem 1.5rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .modal-save-btn:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+        .modal-cancel-btn {
+          background: #e0e7ff;
+          color: #232946;
+          border: none;
+          border-radius: 8px;
+          padding: 0.7rem 1.5rem;
+          font-weight: 600;
+          cursor: pointer;
         }
       `}</style>
     </div>
