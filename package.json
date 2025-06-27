@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "aws-sdk": "^2.1691.0",
+    "fast-levenshtein": "^3.0.0",
     "firebase": "11.8.1",
     "firebase-admin": "^13.4.0",
+    "framer-motion": "^12.19.1",
     "next": "15.3.1",
     "node-fetch": "^2.7.0",
     "react": "19.1.0",
@@ -19,6 +21,7 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@types/fast-levenshtein": "^0.0.4",
     "@types/node": "^20.17.32",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.3",

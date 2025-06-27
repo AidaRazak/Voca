@@ -6,6 +6,8 @@ import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '@/app/firebase';
 import { useAuth } from '../auth-context';
 import { updateUserStreak } from '../utils/streakUtils';
+import levenshtein from 'fast-levenshtein';
+import brandsData from '../data/brands.json';
 
 // Helper icons
 const CheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>;
@@ -30,6 +32,8 @@ interface TranscriptionResult {
   message?: string;
   waveform?: number[];
   correctPronunciation?: string;
+  referenceWaveform?: number[];
+  suggestions?: string[];
 }
 
 const WaveformVisualizer = ({ waveformData }: { waveformData: number[] }) => {
@@ -50,6 +54,28 @@ const WaveformVisualizer = ({ waveformData }: { waveformData: number[] }) => {
   );
 };
 
+// Helper: Normalize brand name for matching
+function normalizeBrand(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Helper: Fuzzy match to suggest closest brand(s)
+function getClosestBrands(input: string, allBrands: string[], maxDistance = 3): string[] {
+  const normInput = normalizeBrand(input);
+  let best: string[] = [];
+  let minDist = Infinity;
+  for (const brand of allBrands) {
+    const dist = levenshtein.get(normInput, normalizeBrand(brand));
+    if (dist < minDist) {
+      minDist = dist;
+      best = [brand];
+    } else if (dist === minDist) {
+      best.push(brand);
+    }
+  }
+  return minDist <= maxDistance ? best : [];
+}
+
 const FeedbackDisplay = ({ result, onTryAgain }: { result: TranscriptionResult, onTryAgain: () => void }) => {
   if (!result) return null;
 
@@ -57,13 +83,22 @@ const FeedbackDisplay = ({ result, onTryAgain }: { result: TranscriptionResult, 
     ?.map((userP, i) => ({ ...userP, correctSymbol: result.correctPhonemes?.[i]?.symbol }))
     .filter(p => !p.correct && p.correctSymbol) || [];
 
+  const hasPhonemeData = Array.isArray(result.userPhonemes) && result.userPhonemes.length > 0;
+  const hasWaveformData = Array.isArray(result.waveform) && result.waveform.length > 0;
+  const accuracy = typeof result.accuracy === 'number' ? result.accuracy : 0;
+
   const getAiSummary = () => {
-    const accuracy = result.accuracy || 0;
+    if (!hasPhonemeData || accuracy === 0) return "We couldn't analyze your pronunciation. Please try again with a clearer recording.";
     if (accuracy >= 95) return "Exceptional work! Your pronunciation is nearly perfect. A model for others to follow.";
     if (accuracy > 80) return `Great job! You have a strong grasp of the pronunciation. A little refinement on the highlighted sounds will make it perfect.`;
     if (accuracy > 60) return "A good attempt. You have the basics down, but some key sounds are off. Focus on the tips below to see a big improvement.";
     return "There's room for improvement. Let's break down the sounds and work on them one by one. You can do this!";
   }
+
+  // Mock: For demo, create a fake reference waveform if not present
+  const referenceWaveform = result.referenceWaveform || (result.waveform && result.waveform.map((v, i) => (i % 2 === 0 ? v : Math.max(1, v - 10))));
+
+  const suggestions = result.suggestions || [];
 
   return (
     <div className="feedback-container">
@@ -77,74 +112,100 @@ const FeedbackDisplay = ({ result, onTryAgain }: { result: TranscriptionResult, 
           <h3>Brand Not Found</h3>
           <p>Your transcription: "<em>{result.transcript}</em>"</p>
           <p className="feedback">{result.message || 'We could not identify the car brand you mentioned.'}</p>
+          {suggestions.length > 0 && (
+            <div className="brand-suggestions">
+              <p>Did you mean:</p>
+              <ul>
+                {suggestions.map((s, i) => <li key={i}><strong>{s}</strong></li>)}
+              </ul>
+            </div>
+          )}
+          <div className="grid-item waveform-card">
+            <h3>Your Pronunciation Waveform</h3>
+            <WaveformVisualizer waveformData={result.waveform || []} />
+          </div>
         </div>
       ) : (
         <div className="feedback-grid">
           <div className="grid-item score-card">
             <h3>Overall Score</h3>
             <div className="score-circle">
-              <span className="score-number">{result.accuracy || 0}<span className="percent-sign">%</span></span>
+              <span className="score-number">{accuracy}<span className="percent-sign">%</span></span>
             </div>
             <p className="ai-summary">
               <strong>AI Coach:</strong> "{getAiSummary()}"
             </p>
+            {(!hasPhonemeData || accuracy === 0) && (
+              <div style={{color: '#e63946', marginTop: '1rem', fontWeight: 600}}>
+                Could not analyze your pronunciation. Please try again with a clearer recording.
+              </div>
+            )}
           </div>
-          
           <div className="grid-item analysis-card">
             <h3>Phoneme Breakdown</h3>
             <p className="description">Comparing your sounds to the correct pronunciation.</p>
-            <div className="phoneme-breakdown-table">
-              <div className="breakdown-header">
-                <span>Expected</span>
-                <span></span>
-                <span>You Said</span>
+            {!hasPhonemeData ? (
+              <div style={{color: '#e63946', fontWeight: 500}}>No phoneme data available.</div>
+            ) : (
+              <div className="phoneme-breakdown-table">
+                <div className="breakdown-header">
+                  <span>Expected</span>
+                  <span></span>
+                  <span>You Said</span>
+                </div>
+                <div className="breakdown-body">
+                  {result.correctPhonemes?.map((correctP, i) => {
+                    const userP = result.userPhonemes?.[i];
+                    const isCorrect = userP?.correct ?? false;
+                    return(
+                      <div className="breakdown-row" key={i}>
+                        <span className="phoneme-cell correct">
+                          {correctP.symbol}
+                        </span>
+                        <span className={`phoneme-cell symbol ${isCorrect ? 'correct' : 'incorrect'}`}>{isCorrect ? <CheckIcon/> : <CrossIcon/>}</span>
+                        <span className={`phoneme-cell user ${!isCorrect ? 'incorrect' : ''}`}>{userP?.symbol || '?'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="breakdown-body">
-                {result.correctPhonemes?.map((correctP, i) => {
-                  const userP = result.userPhonemes?.[i];
-                  const isCorrect = userP?.correct ?? false;
-                  return(
-                    <div className="breakdown-row" key={i}>
-                       <span className="phoneme-cell correct">
-                        {correctP.symbol}
-                       </span>
-                       <span className={`phoneme-cell symbol ${isCorrect ? 'correct' : 'incorrect'}`}>
-                        {isCorrect ? <CheckIcon/> : <CrossIcon/>}
-                       </span>
-                       <span className={`phoneme-cell user ${!isCorrect ? 'incorrect' : ''}`}>
-                        {userP?.symbol || '?'}
-                       </span>
-                    </div>
-                  );
-                })}
+            )}
+          </div>
+          <div className="grid-item tips-card">
+            <h3><LightbulbIcon/> Improvement Tips</h3>
+            {(!hasPhonemeData || accuracy === 0) ? (
+              <p className="perfect-score-message" style={{color: '#e63946'}}>No feedback available. Please try again with a clearer recording.</p>
+            ) : incorrectPhonemes.length > 0 ? (
+              <ul className="tips-list">
+                {incorrectPhonemes.map((p, i) => (
+                  <li key={i}>
+                    You said <span className="phoneme incorrect">{p.symbol}</span> instead of <strong>{p.correctSymbol}</strong>. Focus on the correct tongue and lip placement for this sound.
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              accuracy >= 95 ? (
+                <p className="perfect-score-message">
+                  ✨ Excellent work! Your pronunciation was perfect. Keep practicing!
+                </p>
+              ) : null
+            )}
+          </div>
+          <div className="grid-item waveform-card">
+            <h3>Waveform Comparison</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Reference Pronunciation</div>
+                <WaveformVisualizer waveformData={referenceWaveform || []} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Your Pronunciation</div>
+                <WaveformVisualizer waveformData={result.waveform || []} />
               </div>
             </div>
           </div>
-          
-          <div className="grid-item tips-card">
-            <h3><LightbulbIcon/> Improvement Tips</h3>
-            {incorrectPhonemes.length > 0 ? (
-              <ul className="tips-list">
-              {incorrectPhonemes.map((p, i) => (
-                <li key={i}>
-                  You said <span className="phoneme incorrect">{p.symbol}</span> instead of <strong>{p.correctSymbol}</strong>. Focus on the correct tongue and lip placement for this sound.
-                </li>
-              ))}
-            </ul>
-            ) : (
-              <p className="perfect-score-message">
-                ✨ Excellent work! Your pronunciation was perfect. Keep practicing!
-              </p>
-            )}
-          </div>
-
-          <div className="grid-item waveform-card">
-            <h3>Your Voice Waveform</h3>
-            <WaveformVisualizer waveformData={result.waveform || []} />
-          </div>
         </div>
       )}
-
       <div className="action-buttons">
         <button onClick={onTryAgain} className="try-again-btn">
           Try Another Brand
@@ -299,28 +360,7 @@ export default function SearchPage() {
                 const pollResult = await pollRes.json();
                 
                 if (pollResult.status === 'COMPLETED') {
-                  const correctPhonemes = pollResult.correctPronunciation
-                    ?.split(/[-\s\/]/)
-                    .map((p: string) => ({ symbol: p.trim() }))
-                    .filter((p: Phoneme) => p.symbol) || [];
-
-                  const processedResult: TranscriptionResult = {
-                    ...pollResult,
-                    correctPhonemes: correctPhonemes,
-                    userPhonemes: pollResult.phonemes,
-                  };
-                  
-                  setFeedbackResult(processedResult);
-                  setIsProcessing(false);
-
-                  // Update streak when user completes a practice session
-                  if (user && processedResult.brandFound) {
-                    await updateUserStreak(user.uid, {
-                      accuracy: processedResult.accuracy || 0,
-                      brandName: processedResult.detectedBrand,
-                      sessionType: 'practice'
-                    });
-                  }
+                  processAIResult(pollResult);
                 } else if (pollResult.status === 'FAILED') {
                   throw new Error(`Transcription failed: ${pollResult.error || 'Unknown reason'}`);
                 } else {
@@ -358,6 +398,36 @@ export default function SearchPage() {
   const handleTryAgain = () => {
     setFeedbackResult(null);
   };
+
+  const allBrandNames = brandsData.map((b: any) => b.name);
+
+  function processAIResult(pollResult: any) {
+    const detected = pollResult.transcript || '';
+    const normDetected = normalizeBrand(detected);
+    let foundBrand = allBrandNames.find((b: string) => normalizeBrand(b) === normDetected);
+    let suggestions: string[] = [];
+    if (!foundBrand) {
+      // Use fuzzy matching if exact match fails
+      const fuzzyMatches = getClosestBrands(detected, allBrandNames, 3);
+      if (fuzzyMatches.length > 0) {
+        foundBrand = fuzzyMatches[0];
+        suggestions = fuzzyMatches;
+      }
+    }
+    const processedResult: TranscriptionResult = {
+      ...pollResult,
+      brandFound: !!foundBrand,
+      detectedBrand: foundBrand || detected,
+      suggestions,
+      correctPhonemes: pollResult.correctPronunciation
+        ?.split(/[-\s\/]/)
+        .map((p: string) => ({ symbol: p.trim() }))
+        .filter((p: { symbol: string }) => p.symbol) || [],
+      userPhonemes: pollResult.phonemes,
+    };
+    setFeedbackResult(processedResult);
+    setIsProcessing(false);
+  }
 
   return (
     <div className="search-page">

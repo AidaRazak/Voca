@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../auth-context";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -15,6 +17,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { user } = useAuth();
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminForm, setAdminForm] = useState({ email: '', password: '' });
+  const [adminError, setAdminError] = useState('');
+  const [adminLoading, setAdminLoading] = useState(false);
 
   useEffect(() => {
     // Redirect if already logged in
@@ -74,6 +80,36 @@ export default function LoginPage() {
     router.push('/signup');
   };
 
+  const handleAdminInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setAdminForm(prev => ({ ...prev, [name]: value }));
+    setAdminError('');
+  };
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminForm.email.trim() || !adminForm.password.trim()) {
+      setAdminError('Please fill in all fields');
+      return;
+    }
+    setAdminLoading(true);
+    setAdminError('');
+    try {
+      // Query Firestore for admin credentials
+      const adminsRef = collection(db, 'admins');
+      const q = query(adminsRef, where('email', '==', adminForm.email), where('password', '==', adminForm.password));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        router.push('/admin-dashboard');
+      } else {
+        setAdminError('Invalid admin credentials');
+      }
+    } catch (err) {
+      setAdminError('Error checking admin credentials');
+    }
+    setAdminLoading(false);
+  };
+
   return (
     <div className="login-page">
       <div className="login-container">
@@ -127,6 +163,17 @@ export default function LoginPage() {
               Create Account
             </button>
           </p>
+        </div>
+
+        <div className="admin-login-toggle" style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+          <button
+            type="button"
+            className="link-button"
+            style={{ color: '#764ba2', fontWeight: 600, fontSize: '0.85rem', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem 1.2rem' }}
+            onClick={() => router.push('/admin-dashboard/signin')}
+          >
+            Sign In as Admin
+          </button>
         </div>
 
         <div className="back-to-home">

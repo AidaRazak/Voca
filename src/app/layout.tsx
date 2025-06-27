@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Playfair_Display, Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from './auth-context'
 
-const inter = Inter({ subsets: ['latin'] })
+const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair' })
+const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta' })
 
 export const metadata: Metadata = {
   title: 'Voca - Car Brand Pronunciation',
@@ -16,8 +17,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className={`${playfair.variable} ${jakarta.variable}`}>
+      <body className="font-jakarta">
         <AuthProvider>
           {children}
         </AuthProvider>
