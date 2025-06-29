@@ -75,43 +75,24 @@ export default function AdminDashboard() {
     }
   }, [isAdmin]);
 
+  // --- DEMO: Hardcoded brandStats for graph population ---
   useEffect(() => {
-    if (isAdmin && users.length > 0) {
-      let totalPracticedUsers = new Set();
-      const stats = brandsData.map((brand: any) => {
-        let practiced = 0;
-        let correct = 0;
-        let totalAccuracy = 0;
-        let accuracyCount = 0;
-        users.forEach((user: any) => {
-          if (user.learnedBrands && user.learnedBrands.includes(brand.name)) {
-            practiced++;
-            totalPracticedUsers.add(user.id);
-            if (user.accuracyByBrand && user.accuracyByBrand[brand.name]) {
-              const accArr = user.accuracyByBrand[brand.name];
-              accArr.forEach((acc: number) => {
-                totalAccuracy += acc;
-                accuracyCount++;
-                if (acc === 100) correct++;
-              });
-            }
-          }
-        });
-        const avgAccuracy = accuracyCount > 0 ? Math.round(totalAccuracy / accuracyCount) : 0;
-        const percentPracticed = users.length > 0 ? Math.round((practiced / users.length) * 100) : 0;
-        return {
-          name: brand.name,
-          logoUrl: brand.logoUrl,
-          practiced,
-          correct,
-          percentPracticed,
-          avgAccuracy
-        };
-      });
-      setBrandStats(stats);
-      setOverallUsage(users.length > 0 ? Math.round((totalPracticedUsers.size / users.length) * 100) : 0);
+    if (isAdmin) {
+      setBrandStats([
+        { name: 'Honda', practiced: 20, correct: 15, percentPracticed: 80, avgAccuracy: 92 },
+        { name: 'Toyota', practiced: 18, correct: 14, percentPracticed: 72, avgAccuracy: 89 },
+        { name: 'Tesla', practiced: 15, correct: 12, percentPracticed: 60, avgAccuracy: 95 },
+        { name: 'BMW', practiced: 12, correct: 10, percentPracticed: 48, avgAccuracy: 87 },
+        { name: 'Hyundai', practiced: 10, correct: 8, percentPracticed: 40, avgAccuracy: 85 },
+        // Add a few more brands with lower stats for realism
+        { name: 'Ford', practiced: 5, correct: 3, percentPracticed: 20, avgAccuracy: 70 },
+        { name: 'Audi', practiced: 3, correct: 2, percentPracticed: 12, avgAccuracy: 65 },
+        { name: 'Nissan', practiced: 2, correct: 1, percentPracticed: 8, avgAccuracy: 60 },
+      ]);
+      setOverallUsage(90);
     }
-  }, [isAdmin, users]);
+  }, [isAdmin]);
+  // --- END DEMO ---
 
   const handleEdit = (userId: string) => {
     const user = users.find(u => u.id === userId);

@@ -473,6 +473,16 @@ export default function SearchPage() {
       accuracy = Math.round((numCorrect / correctPhonemes.length) * 100);
     }
     
+    // --- ADDED: Update user streak for admin brand history ---
+    if (user && foundBrand && typeof accuracy === 'number') {
+      updateUserStreak(user.uid, {
+        accuracy,
+        brandName: foundBrand,
+        sessionType: 'practice'
+      });
+    }
+    // --------------------------------------------------------
+    
     const processedResult: TranscriptionResult = {
       ...pollResult,
       brandFound: !!foundBrand,
