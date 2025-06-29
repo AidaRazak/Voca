@@ -23,7 +23,7 @@ export default function Dashboard() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setGameScore(data.gameScore || 0);
-          setStreakCount(data.streak?.count || 0);
+          setStreakCount(data.streakCount || 0);
           setUsername(data.username || user.displayName || 'User');
         } else {
           setUsername(user.displayName || 'User');

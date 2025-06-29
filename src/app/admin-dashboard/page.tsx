@@ -282,7 +282,7 @@ export default function AdminDashboard() {
                       <tr key={user.id} className={user.deactivated ? 'deactivated-row' : ''}>
                         <td>{user.username || '—'}</td>
                         <td>{user.email}</td>
-                        <td>{user.streakCount ?? user.streak?.count ?? 0}</td>
+                        <td>{user.streakCount ?? 0}</td>
                         <td>{user.gameScore ?? 0}</td>
                         <td>
                           <button className="action-btn edit" onClick={() => handleEdit(user.id)}>Edit</button>
