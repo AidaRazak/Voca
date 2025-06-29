@@ -93,7 +93,14 @@ export default function PronunciationShowdown({ onScoreUpdate }: { onScoreUpdate
       const pollResult = await pollRes.json();
       
       if (pollResult.status === 'COMPLETED') {
-        const userScore = pollResult.accuracy || 0;
+        let userScore = pollResult.accuracy || 0;
+        
+        // Fallback: Calculate accuracy from phoneme data if not provided by backend
+        if (typeof userScore !== 'number' && pollResult.userPhonemes && pollResult.correctPhonemes) {
+          const numCorrect = pollResult.userPhonemes.filter((p: any) => p.correct).length;
+          userScore = Math.round((numCorrect / pollResult.correctPhonemes.length) * 100);
+        }
+        
         const isWin = userScore >= targetScore;
         setShowdownResult({ userScore, targetScore, isWin });
         setGamePhase('result');

@@ -459,15 +459,28 @@ export default function SearchPage() {
     if (foundBrand) {
       brandDetails = brandsData.find((b: any) => b.name.toLowerCase() === foundBrand.toLowerCase());
     }
+    
+    const correctPhonemes = brandDetails?.phonemes
+      ? brandDetails.phonemes.split(/[-\s\/]/).map((p: string) => ({ symbol: p.trim() })).filter((p: { symbol: string }) => p.symbol)
+      : pollResult.correctPronunciation?.split(/[-\s\/]/).map((p: string) => ({ symbol: p.trim() })).filter((p: { symbol: string }) => p.symbol) || [];
+    
+    const userPhonemes = pollResult.phonemes || [];
+    
+    // Calculate accuracy if not provided by backend
+    let accuracy = pollResult.accuracy;
+    if (typeof accuracy !== 'number' && userPhonemes.length > 0 && correctPhonemes.length > 0) {
+      const numCorrect = userPhonemes.filter((p: any) => p.correct).length;
+      accuracy = Math.round((numCorrect / correctPhonemes.length) * 100);
+    }
+    
     const processedResult: TranscriptionResult = {
       ...pollResult,
       brandFound: !!foundBrand,
       detectedBrand: foundBrand || detected,
       suggestions,
-      correctPhonemes: brandDetails?.phonemes
-        ? brandDetails.phonemes.split(/[-\s\/]/).map((p: string) => ({ symbol: p.trim() })).filter((p: { symbol: string }) => p.symbol)
-        : pollResult.correctPronunciation?.split(/[-\s\/]/).map((p: string) => ({ symbol: p.trim() })).filter((p: { symbol: string }) => p.symbol) || [],
-      userPhonemes: pollResult.phonemes,
+      correctPhonemes,
+      userPhonemes,
+      accuracy,
       brandDescription: brandDetails?.description || pollResult.brandDescription,
       brandLogo: brandDetails?.logoUrl,
       brandCountry: brandDetails?.country,

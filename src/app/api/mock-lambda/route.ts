@@ -29,6 +29,10 @@ export async function POST(request: NextRequest) {
       { symbol: 'ə', label: 'UH', correct: true }
     ];
 
+    // Calculate accuracy based on correct phonemes
+    const numCorrect = userPhonemes.filter(p => p.correct).length;
+    const accuracy = Math.round((numCorrect / correctPhonemes.length) * 100);
+
     // Mock response that mimics your Lambda function
     const mockResponse = {
       jobName: `transcription-${Date.now()}`,
@@ -38,7 +42,8 @@ export async function POST(request: NextRequest) {
       detectedBrand: "Tesla",
       pronunciationFeedback: "Great pronunciation! 'Tesla' is pronounced as 'TEZ-luh'. You got it right!",
       correctPhonemes,
-      userPhonemes
+      userPhonemes,
+      accuracy
     };
 
     return NextResponse.json(mockResponse);
