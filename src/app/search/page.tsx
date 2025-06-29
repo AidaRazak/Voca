@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '@/app/firebase';
 import { useAuth } from '../auth-context';
@@ -34,6 +34,11 @@ interface TranscriptionResult {
   correctPronunciation?: string;
   referenceWaveform?: number[];
   suggestions?: string[];
+  brandDescription?: string;
+  brandLogo?: string;
+  brandCountry?: string;
+  brandFounded?: string;
+  brandImages?: string[];
 }
 
 const WaveformVisualizer = ({ waveformData }: { waveformData: number[] }) => {
@@ -93,7 +98,7 @@ const FeedbackDisplay = ({ result, onTryAgain }: { result: TranscriptionResult, 
     if (accuracy > 80) return `Great job! You have a strong grasp of the pronunciation. A little refinement on the highlighted sounds will make it perfect.`;
     if (accuracy > 60) return "A good attempt. You have the basics down, but some key sounds are off. Focus on the tips below to see a big improvement.";
     return "There's room for improvement. Let's break down the sounds and work on them one by one. You can do this!";
-  }
+  };
 
   // Mock: For demo, create a fake reference waveform if not present
   const referenceWaveform = result.referenceWaveform || (result.waveform && result.waveform.map((v, i) => (i % 2 === 0 ? v : Math.max(1, v - 10))));
@@ -101,116 +106,142 @@ const FeedbackDisplay = ({ result, onTryAgain }: { result: TranscriptionResult, 
   const suggestions = result.suggestions || [];
 
   return (
-    <div className="feedback-container">
-      <div className="feedback-header">
-        <h2>Pronunciation Report</h2>
-        {result.brandFound && <p>Results for "<strong>{result.detectedBrand}</strong>"</p>}
+    <div className="w-full max-w-4xl mx-auto px-4 py-8 space-y-6">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <h2 className="text-3xl md:text-4xl font-bold text-navy-900 mb-2 tracking-tight">Pronunciation Report</h2>
+        {result.brandFound && <p className="text-lg text-navy-700">Results for <span className="font-semibold">{result.detectedBrand}</span></p>}
       </div>
 
+      {/* Brand Not Found */}
       {!result.brandFound ? (
-        <div className="grid-item centered-card">
-          <h3>Brand Not Found</h3>
-          <p>Your transcription: "<em>{result.transcript}</em>"</p>
-          <p className="feedback">{result.message || 'We could not identify the car brand you mentioned.'}</p>
+        <div className="bg-white/90 rounded-2xl shadow-lg p-8 space-y-4">
+          <h3 className="text-xl font-bold text-red-600">Brand Not Found</h3>
+          <p className="text-gray-700">Your transcription: <span className="italic">{result.transcript}</span></p>
+          <p className="text-red-500 font-semibold">{result.message || 'We could not identify the car brand you mentioned.'}</p>
           {suggestions.length > 0 && (
-            <div className="brand-suggestions">
-              <p>Did you mean:</p>
-              <ul>
-                {suggestions.map((s, i) => <li key={i}><strong>{s}</strong></li>)}
+            <div className="bg-yellow-50 rounded-lg p-4 shadow-inner">
+              <p className="font-semibold text-yellow-800 mb-2">Did you mean:</p>
+              <ul className="flex flex-wrap gap-2">
+                {suggestions.map((s, i) => <li key={i} className="bg-yellow-200 rounded px-2 py-1 font-bold text-yellow-900">{s}</li>)}
               </ul>
             </div>
           )}
-          <div className="grid-item waveform-card">
-            <h3>Your Pronunciation Waveform</h3>
-            <WaveformVisualizer waveformData={result.waveform || []} />
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-3">Your Pronunciation Waveform</h3>
+            <div className="bg-slate-100 rounded-xl p-4">
+              <WaveformVisualizer waveformData={result.waveform || []} />
+            </div>
           </div>
         </div>
       ) : (
-        <div className="feedback-grid">
-          <div className="grid-item score-card">
-            <h3>Overall Score</h3>
-            <div className="score-circle">
-              <span className="score-number">{accuracy}<span className="percent-sign">%</span></span>
+        <div className="space-y-6">
+          {/* Score Card */}
+          <div className="bg-white/90 rounded-2xl shadow-lg p-8">
+            <h3 className="text-2xl font-bold text-navy-900 mb-6 text-center">Overall Score</h3>
+            <div className="flex flex-col items-center space-y-4">
+              <div className="relative flex items-center justify-center">
+                <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-blue-600 to-blue-300 flex items-center justify-center shadow-lg">
+                  <span className="text-4xl font-extrabold text-white drop-shadow-lg">{accuracy}<span className="text-xl align-super">%</span></span>
+                </div>
+              </div>
+              <div className="text-center max-w-2xl">
+                <div className="text-base italic text-navy-700 bg-blue-50 rounded-lg px-4 py-3 shadow-inner">
+                  <span className="font-bold text-blue-700">AI Coach:</span> {getAiSummary()}
+                </div>
+              </div>
             </div>
-            <p className="ai-summary">
-              <strong>AI Coach:</strong> "{getAiSummary()}"
-            </p>
-            {(!hasPhonemeData || accuracy === 0) && (
-              <div style={{color: '#e63946', marginTop: '1rem', fontWeight: 600}}>
-                Could not analyze your pronunciation. Please try again with a clearer recording.
-              </div>
-            )}
           </div>
-          <div className="grid-item analysis-card">
-            <h3>Phoneme Breakdown</h3>
-            <p className="description">Comparing your sounds to the correct pronunciation.</p>
+
+          {/* Phoneme Breakdown Card */}
+          <div className="bg-white/90 rounded-2xl shadow-lg p-8">
+            <h3 className="text-2xl font-bold text-navy-900 mb-4">Phoneme Breakdown</h3>
+            <p className="text-gray-600 mb-6">Comparing your sounds to the correct pronunciation.</p>
             {!hasPhonemeData ? (
-              <div style={{color: '#e63946', fontWeight: 500}}>No phoneme data available.</div>
+              <div className="text-red-500 font-semibold">No phoneme data available.</div>
             ) : (
-              <div className="phoneme-breakdown-table">
-                <div className="breakdown-header">
-                  <span>Expected</span>
-                  <span></span>
-                  <span>You Said</span>
-                </div>
-                <div className="breakdown-body">
-                  {result.correctPhonemes?.map((correctP, i) => {
-                    const userP = result.userPhonemes?.[i];
-                    const isCorrect = userP?.correct ?? false;
-                    return(
-                      <div className="breakdown-row" key={i}>
-                        <span className="phoneme-cell correct">
-                          {correctP.symbol}
-                        </span>
-                        <span className={`phoneme-cell symbol ${isCorrect ? 'correct' : 'incorrect'}`}>{isCorrect ? <CheckIcon/> : <CrossIcon/>}</span>
-                        <span className={`phoneme-cell user ${!isCorrect ? 'incorrect' : ''}`}>{userP?.symbol || '?'}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-y-2">
+                  <thead>
+                    <tr className="bg-blue-50">
+                      <th className="px-4 py-3 text-left text-navy-800 text-base font-semibold rounded-l-xl">Expected</th>
+                      <th className="px-4 py-3 text-center text-navy-800 text-base font-semibold">   </th>
+                      <th className="px-4 py-3 text-right text-navy-800 text-base font-semibold rounded-r-xl">You Said</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.correctPhonemes?.map((correctP, i) => {
+                      const userP = result.userPhonemes?.[i];
+                      const isCorrect = userP?.correct ?? false;
+                      return (
+                        <tr key={i} className="bg-white/70 hover:bg-blue-50 transition-all">
+                          <td className="px-4 py-3 font-mono text-lg text-blue-900 font-bold rounded-l-xl">{correctP.symbol}</td>
+                          <td className="px-4 py-3 text-center">
+                            {isCorrect ? <span className="text-green-500 text-2xl">✅</span> : <span className="text-red-500 text-2xl">❌</span>}
+                          </td>
+                          <td className={`px-4 py-3 font-mono text-lg font-bold rounded-r-xl ${!isCorrect ? 'text-red-600 line-through' : 'text-blue-900'}`}>{userP?.symbol || '?'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
-          <div className="grid-item tips-card">
-            <h3><LightbulbIcon/> Improvement Tips</h3>
+
+          {/* Improvement Tips Card */}
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-2xl shadow-lg p-8">
+            <div className="flex items-center gap-3 mb-4">
+              <LightbulbIcon />
+              <h3 className="text-2xl font-bold text-yellow-700">Improvement Tips</h3>
+            </div>
             {(!hasPhonemeData || accuracy === 0) ? (
-              <p className="perfect-score-message" style={{color: '#e63946'}}>No feedback available. Please try again with a clearer recording.</p>
+              <p className="text-red-500 font-semibold">No feedback available. Please try again with a clearer recording.</p>
             ) : incorrectPhonemes.length > 0 ? (
-              <ul className="tips-list">
+              <ul className="space-y-3">
                 {incorrectPhonemes.map((p, i) => (
-                  <li key={i}>
-                    You said <span className="phoneme incorrect">{p.symbol}</span> instead of <strong>{p.correctSymbol}</strong>. Focus on the correct tongue and lip placement for this sound.
+                  <li key={i} className="bg-yellow-100 rounded-lg px-4 py-3 text-yellow-900 shadow-sm">
+                    You said <span className="font-mono font-bold text-red-600">{p.symbol}</span> instead of <span className="font-bold text-blue-700">{p.correctSymbol}</span>. Focus on the correct tongue and lip placement for this sound.
                   </li>
                 ))}
               </ul>
             ) : (
               accuracy >= 95 ? (
-                <p className="perfect-score-message">
-                  ✨ Excellent work! Your pronunciation was perfect. Keep practicing!
-                </p>
+                <p className="text-green-600 font-semibold text-lg">✨ Excellent work! Your pronunciation was perfect. Keep practicing!</p>
               ) : null
             )}
           </div>
-          <div className="grid-item waveform-card">
-            <h3>Waveform Comparison</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+          {/* Waveform Comparison Card */}
+          <div className="bg-slate-800 rounded-2xl shadow-lg p-8">
+            <h3 className="text-2xl font-bold text-white mb-6">Waveform Comparison</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Reference Pronunciation</div>
-                <WaveformVisualizer waveformData={referenceWaveform || []} />
+                <div className="font-semibold text-slate-200 mb-3">Reference Pronunciation</div>
+                <div className="bg-slate-700 rounded-xl p-4">
+                  <WaveformVisualizer waveformData={referenceWaveform || []} />
+                </div>
               </div>
               <div>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Your Pronunciation</div>
-                <WaveformVisualizer waveformData={result.waveform || []} />
+                <div className="font-semibold text-slate-200 mb-3">Your Pronunciation</div>
+                <div className="bg-slate-700 rounded-xl p-4">
+                  <WaveformVisualizer waveformData={result.waveform || []} />
+                </div>
               </div>
             </div>
           </div>
+
+          {/* CTA Button Card */}
+          <div className="bg-white/90 rounded-2xl shadow-lg p-8 text-center">
+            <button
+              onClick={onTryAgain}
+              className="px-8 py-4 rounded-full bg-gradient-to-r from-blue-600 to-blue-400 text-white font-bold text-lg shadow-xl hover:scale-105 hover:from-blue-700 hover:to-blue-500 transition-all duration-300 border-2 border-blue-200"
+            >
+              Try Another Brand
+            </button>
+          </div>
         </div>
       )}
-      <div className="action-buttons">
-        <button onClick={onTryAgain} className="try-again-btn">
-          Try Another Brand
-        </button>
-      </div>
     </div>
   );
 };
@@ -229,6 +260,8 @@ export default function SearchPage() {
   const [allBrands, setAllBrands] = useState<string[]>([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [filteredBrands, setFilteredBrands] = useState<string[]>([]);
+  const [countdown, setCountdown] = useState(3);
+  const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch all brand names on mount
   useEffect(() => {
@@ -364,7 +397,7 @@ export default function SearchPage() {
                 } else if (pollResult.status === 'FAILED') {
                   throw new Error(`Transcription failed: ${pollResult.error || 'Unknown reason'}`);
                 } else {
-                  setTimeout(pollForResult, 3000);
+                  setTimeout(pollForResult, 1000);
                 }
               } catch (pollErr) {
                 setIsProcessing(false);
@@ -373,7 +406,7 @@ export default function SearchPage() {
               }
             };
             
-            setTimeout(pollForResult, 3000);
+            setTimeout(pollForResult, 1000);
 
           } catch (err) {
             setIsProcessing(false);
@@ -383,12 +416,20 @@ export default function SearchPage() {
         };
       };
 
-      mediaRecorder.start();
+      setCountdown(3);
       setIsRecording(true);
-      setTimeout(() => {
-        mediaRecorder.stop();
-        setIsRecording(false);
-      }, 3000);
+      countdownInterval.current = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            if (countdownInterval.current) clearInterval(countdownInterval.current);
+            mediaRecorder.stop();
+            setIsRecording(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      mediaRecorder.start();
     }).catch((err) => {
       console.error('Microphone access error:', err);
       alert('Microphone access denied. Please allow microphone access and try again.');
@@ -406,6 +447,7 @@ export default function SearchPage() {
     const normDetected = normalizeBrand(detected);
     let foundBrand = allBrandNames.find((b: string) => normalizeBrand(b) === normDetected);
     let suggestions: string[] = [];
+    let brandDetails = null;
     if (!foundBrand) {
       // Use fuzzy matching if exact match fails
       const fuzzyMatches = getClosestBrands(detected, allBrandNames, 3);
@@ -414,16 +456,23 @@ export default function SearchPage() {
         suggestions = fuzzyMatches;
       }
     }
+    if (foundBrand) {
+      brandDetails = brandsData.find((b: any) => b.name.toLowerCase() === foundBrand.toLowerCase());
+    }
     const processedResult: TranscriptionResult = {
       ...pollResult,
       brandFound: !!foundBrand,
       detectedBrand: foundBrand || detected,
       suggestions,
-      correctPhonemes: pollResult.correctPronunciation
-        ?.split(/[-\s\/]/)
-        .map((p: string) => ({ symbol: p.trim() }))
-        .filter((p: { symbol: string }) => p.symbol) || [],
+      correctPhonemes: brandDetails?.phonemes
+        ? brandDetails.phonemes.split(/[-\s\/]/).map((p: string) => ({ symbol: p.trim() })).filter((p: { symbol: string }) => p.symbol)
+        : pollResult.correctPronunciation?.split(/[-\s\/]/).map((p: string) => ({ symbol: p.trim() })).filter((p: { symbol: string }) => p.symbol) || [],
       userPhonemes: pollResult.phonemes,
+      brandDescription: brandDetails?.description || pollResult.brandDescription,
+      brandLogo: brandDetails?.logoUrl,
+      brandCountry: brandDetails?.country,
+      brandFounded: brandDetails?.founded,
+      brandImages: brandDetails?.imageUrls,
     };
     setFeedbackResult(processedResult);
     setIsProcessing(false);
@@ -450,7 +499,7 @@ export default function SearchPage() {
             <div className="card highlight">
               <h3>Say Brand with AI Feedback</h3>
               <button onClick={recordAndSendToAI} disabled={isRecording || isProcessing}>
-                {isRecording ? 'Recording...' : isProcessing ? 'Processing...' : 'Record Now'}
+                {isRecording ? `Recording... ${countdown}` : isProcessing ? 'Processing...' : 'Record Now'}
               </button>
               <p className="note">Records 3 seconds of audio</p>
             </div>

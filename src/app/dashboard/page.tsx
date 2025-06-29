@@ -34,6 +34,13 @@ export default function Dashboard() {
     }
   }, [user]);
 
+  // Handle navigation when user is not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [user, loading, router]);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -77,28 +84,29 @@ export default function Dashboard() {
     );
   }
 
+  // Don't render anything if user is not authenticated (will redirect via useEffect)
   if (!user) {
-    router.push('/');
     return null;
   }
 
   return (
     <>
-      {/* Streak Button Top Right */}
-      <div className="w-full flex justify-end px-8 pt-8">
+      {/* Streak Button Centered in Header */}
+      <div className="w-full flex justify-center mt-6 mb-4">
         <button
           onClick={() => router.push('/streak')}
-          className="px-6 py-3 rounded-full bg-gradient-to-r from-gold to-yellow-400 text-black font-semibold text-lg shadow-lg hover:scale-105 transition border border-yellow-300"
-          style={{ minWidth: 120 }}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-gold to-yellow-400 text-black font-bold text-lg shadow-lg hover:scale-105 transition border border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          aria-label="View streak"
         >
-          <span className="font-bold">🔥 Streak: {streakCount}</span>
+          <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/90 shadow text-2xl">🔥</span>
+          <span className="ml-2 text-xl font-bold">{streakCount}</span>
         </button>
       </div>
       <main>
         {/* Welcome Section */}
         <section>
-          <h1 className="text-5xl md:text-6xl mb-6 gold">Welcome back, {username}</h1>
-          <p className="text-xl md:text-2xl text-gray-700 max-w-2xl text-center">Ready to master car brand pronunciations? Scroll down to begin your journey.</p>
+          <h1 className="text-5xl md:text-6xl mb-6 gold text-center">Welcome back, {username}</h1>
+          <p className="text-xl md:text-2xl text-gray-700 max-w-2xl text-center mx-auto">Ready to master car brand pronunciations? Scroll down to begin your journey.</p>
         </section>
 
         {/* Practice Pronunciation Section */}
@@ -127,8 +135,8 @@ export default function Dashboard() {
         </section>
       </main>
 
-      {/* Footer with Logout only */}
-      <footer className="w-full fixed bottom-0 left-0 flex justify-center py-6 bg-white/80 backdrop-blur-md z-20 border-t border-gray-200">
+      {/* Fixed Footer with Logout Button (always bottom center) */}
+      <footer className="fixed inset-x-0 bottom-0 flex justify-center py-6 bg-white/80 backdrop-blur-md z-20 border-t border-gray-200">
         <button
           onClick={handleLogout}
           className="px-6 py-3 rounded-full bg-black text-gold font-semibold text-lg shadow-lg hover:scale-105 transition border-2 border-gold"

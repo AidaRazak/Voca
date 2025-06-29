@@ -417,4 +417,8 @@ section:nth-of-type(even) {
 
 .gold {
   color: var(--color-accent-gold);
+}
+
+.game-container h1 {
+  color: white !important;
 } 

@@ -49,7 +49,7 @@ export default function GamePage() {
       default:
         return (
           <div className="text-center">
-            <h1 className="text-4xl font-bold mb-2">Game Arcade</h1>
+            <h1 className="text-4xl font-bold mb-2 text-white">Game Arcade</h1>
             <p className="mb-8 text-lg text-gray-400">Select a game to play</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <button onClick={() => setGameMode('phoneme-challenge')} className="game-card">
