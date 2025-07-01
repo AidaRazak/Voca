@@ -81,7 +81,7 @@ function getClosestBrands(input: string, allBrands: string[], maxDistance = 3): 
   return minDist <= maxDistance ? best : [];
 }
 
-const FeedbackDisplay = ({ result, onTryAgain }: { result: TranscriptionResult, onTryAgain: () => void }) => {
+const FeedbackDisplay = ({ result, onTryAgain, audioUrl }: { result: TranscriptionResult, onTryAgain: () => void, audioUrl?: string }) => {
   if (!result) return null;
 
   const incorrectPhonemes = result.userPhonemes
@@ -111,6 +111,17 @@ const FeedbackDisplay = ({ result, onTryAgain }: { result: TranscriptionResult, 
       <div className="text-center mb-8">
         <h2 className="text-3xl md:text-4xl font-bold text-navy-900 mb-2 tracking-tight">Pronunciation Report</h2>
         {result.brandFound && <p className="text-lg text-navy-700">Results for <span className="font-semibold">{result.detectedBrand}</span></p>}
+        {result.transcript && (
+          <div className="transcript-box" style={{ margin: '1rem 0', background: '#f3f4f6', padding: 12, borderRadius: 8 }}>
+            <strong>Transcript:</strong> <span style={{ fontStyle: 'italic' }}>{result.transcript}</span>
+          </div>
+        )}
+        {typeof audioUrl === 'string' && (
+          <div style={{ margin: '1rem 0' }}>
+            <audio controls src={audioUrl} />
+            <div style={{ fontSize: '0.9rem', color: '#555' }}>Your recording</div>
+          </div>
+        )}
       </div>
 
       {/* Brand Not Found */}
@@ -262,6 +273,7 @@ export default function SearchPage() {
   const [filteredBrands, setFilteredBrands] = useState<string[]>([]);
   const [countdown, setCountdown] = useState(3);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   // Fetch all brand names on mount
   useEffect(() => {
@@ -360,6 +372,8 @@ export default function SearchPage() {
 
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        const localAudioUrl = URL.createObjectURL(audioBlob);
+        setAudioUrl(localAudioUrl);
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
@@ -509,7 +523,7 @@ export default function SearchPage() {
       <button className="streak-btn" onClick={() => router.push('/streak')}>🔥</button>
       
       {feedbackResult ? (
-        <FeedbackDisplay result={feedbackResult} onTryAgain={handleTryAgain} />
+        <FeedbackDisplay result={feedbackResult} onTryAgain={handleTryAgain} {...(typeof audioUrl === 'string' ? { audioUrl } : {})} />
       ) : (
         <>
           {!brandData && <h1 className="page-title">Voca</h1>}
