@@ -66,7 +66,7 @@ export default function StreakPage() {
   };
 
   const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    return date.toLocaleDateString('en-CA');
   };
 
   const isActiveDay = (day: number) => {

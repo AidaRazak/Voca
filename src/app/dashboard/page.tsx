@@ -16,23 +16,20 @@ export default function Dashboard() {
   const [username, setUsername] = useState('');
 
   useEffect(() => {
-    if (user) {
-      const userDocRef = doc(db, 'users', user.uid);
-      
-      const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setGameScore(data.gameScore || 0);
-          setStreakCount(data.streakCount || 0);
-          setUsername(data.username || user.displayName || 'User');
-        } else {
-          setUsername(user.displayName || 'User');
-        }
-      });
-
-      return () => unsubscribe();
-    }
-  }, [user]);
+    if (!db || !user) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setGameScore(data.gameScore || 0);
+        setStreakCount(data.streakCount || 0);
+        setUsername(data.username || user.displayName || 'User');
+      } else {
+        setUsername(user.displayName || 'User');
+      }
+    });
+    return () => unsubscribe();
+  }, [user, db]);
 
   // Handle navigation when user is not authenticated
   useEffect(() => {
@@ -42,6 +39,10 @@ export default function Dashboard() {
   }, [user, loading, router]);
 
   const handleLogout = async () => {
+    if (!auth) {
+      console.error('Logout error: Auth service not available.');
+      return;
+    }
     try {
       await signOut(auth);
       router.push('/');

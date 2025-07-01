@@ -4,7 +4,7 @@ import { db } from '../firebase';
 export interface StreakUpdateData {
   accuracy?: number;
   brandName?: string;
-  sessionType?: 'practice' | 'game';
+  sessionType?: 'practice' | 'game' | 'arcade-session';
 }
 
 export const updateUserStreak = async (userId: string, updateData: StreakUpdateData) => {
@@ -47,39 +47,34 @@ export const updateUserStreak = async (userId: string, updateData: StreakUpdateD
     // Check if user already played today
     const alreadyPlayedToday = newActiveDays.includes(today);
     
+    // Always increment totalSessions for every game played
+    newTotalSessions += 1;
+    // Update average accuracy for every session
+    if (updateData.accuracy !== undefined) {
+      const totalAccuracy = (newAverageAccuracy * (newTotalSessions - 1)) + updateData.accuracy;
+      newAverageAccuracy = Math.round(totalAccuracy / newTotalSessions);
+    }
+    // Only update streak and activeDays if this is a new day
     if (!alreadyPlayedToday) {
-      // Add today to active days
       newActiveDays = [...newActiveDays, today];
-      newTotalSessions += 1;
-      
-      // Update streak count
       if (userData.lastPlayedDate === yesterday) {
-        // Consecutive day
         newStreakCount += 1;
       } else if (userData.lastPlayedDate !== today) {
-        // Break in streak, reset to 1
         newStreakCount = 1;
       }
-      
-      // Update brands learned if new brand
-      if (updateData.brandName) {
-        if (!learnedBrands.includes(updateData.brandName)) {
-          learnedBrands.push(updateData.brandName);
-          newBrandsLearned = learnedBrands.length;
-        }
-        // Update accuracyByBrand
-        if (updateData.accuracy !== undefined) {
-          if (!accuracyByBrand[updateData.brandName]) {
-            accuracyByBrand[updateData.brandName] = [];
-          }
-          accuracyByBrand[updateData.brandName].push(updateData.accuracy);
-        }
+    }
+    // Update brands learned if new brand
+    if (updateData.brandName) {
+      if (!learnedBrands.includes(updateData.brandName)) {
+        learnedBrands.push(updateData.brandName);
+        newBrandsLearned = learnedBrands.length;
       }
-      
-      // Update average accuracy
+      // Update accuracyByBrand
       if (updateData.accuracy !== undefined) {
-        const totalAccuracy = (newAverageAccuracy * (newTotalSessions - 1)) + updateData.accuracy;
-        newAverageAccuracy = Math.round(totalAccuracy / newTotalSessions);
+        if (!accuracyByBrand[updateData.brandName]) {
+          accuracyByBrand[updateData.brandName] = [];
+        }
+        accuracyByBrand[updateData.brandName].push(updateData.accuracy);
       }
     }
     

@@ -114,10 +114,10 @@ export default function PronunciationShowdown({ onScoreUpdate }: { onScoreUpdate
           }
         }
 
-        // Update streak for game completion
+        // The userScore shown in the UI is passed as accuracy to updateUserStreak, ensuring consistency between UI feedback and stored stats.
         if (user) {
           await updateUserStreak(user.uid, {
-            accuracy: userScore,
+            accuracy: userScore, // This matches the score shown to the user
             brandName: currentBrand,
             sessionType: 'game'
           });

@@ -266,6 +266,7 @@ export default function SearchPage() {
   // Fetch all brand names on mount
   useEffect(() => {
     const fetchBrands = async () => {
+      if (!db) return;
       try {
         const brandsCol = collection(db, 'brands');
         const brandsSnap = await getDocs(brandsCol);
@@ -276,7 +277,7 @@ export default function SearchPage() {
       }
     };
     fetchBrands();
-  }, []);
+  }, [db]);
 
   // Filter brands as user types
   useEffect(() => {
@@ -295,6 +296,7 @@ export default function SearchPage() {
   const handleBack = () => router.push('/dashboard');
 
   const searchCar = async (brand: string) => {
+    if (!db) return;
     const trimmed = brand.trim().toLowerCase();
     setBrandData(null);
     setBrandError(null);
@@ -512,24 +514,13 @@ export default function SearchPage() {
         <>
           {!brandData && <h1 className="page-title">Voca</h1>}
           <div className="card-container">
-            <div className="card">
-              <h3>Say Brand</h3>
-              <button onClick={activateMic} disabled={isListening}>
+            {/* Combined Search Brand Card */}
+            <div className="card highlight">
+              <h3>Search Brand</h3>
+              <button onClick={activateMic} disabled={isListening} style={{ marginBottom: '1rem' }}>
                 {isListening ? 'Listening...' : 'Start Talking'}
               </button>
-            </div>
-
-            <div className="card highlight">
-              <h3>Say Brand with AI Feedback</h3>
-              <button onClick={recordAndSendToAI} disabled={isRecording || isProcessing}>
-                {isRecording ? `Recording... ${countdown}` : isProcessing ? 'Processing...' : 'Record Now'}
-              </button>
-              <p className="note">Records 3 seconds of audio</p>
-            </div>
-
-            <div className="card">
-              <h3>Type Brand</h3>
-              <div className={`input-dropdown-wrapper${dropdownVisible && filteredBrands.length > 0 ? ' dropdown-open' : ''}`}>
+              <div className={`input-dropdown-wrapper${dropdownVisible && filteredBrands.length > 0 ? ' dropdown-open' : ''}`}> 
                 <input
                   type="text"
                   placeholder="e.g. Tesla"
@@ -561,7 +552,7 @@ export default function SearchPage() {
                   </ul>
                 )}
               </div>
-              <button onClick={() => searchCar(searchValue)}>Search</button>
+              <button onClick={() => searchCar(searchValue)} style={{ marginTop: '1rem' }}>Search</button>
               {brandError && (
                 <div className="brand-error">{brandError}</div>
               )}
@@ -585,6 +576,15 @@ export default function SearchPage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* AI Feedback/Recording Card remains as a separate option */}
+            <div className="card">
+              <h3>Say Brand with AI Feedback</h3>
+              <button onClick={recordAndSendToAI} disabled={isRecording || isProcessing}>
+                {isRecording ? `Recording... ${countdown}` : isProcessing ? 'Processing...' : 'Record Now'}
+              </button>
+              <p className="note">Records 3 seconds of audio</p>
             </div>
           </div>
         </>

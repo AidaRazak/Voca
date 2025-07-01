@@ -8,6 +8,7 @@ import PhonemeChallenge from './PhonemeChallenge';
 import ListenGuess from './ListenGuess';
 import PronunciationShowdown from './PronunciationShowdown';
 import Link from 'next/link';
+import { updateUserStreak } from '../utils/streakUtils';
 
 type GameMode = 'menu' | 'phoneme-challenge' | 'listen-guess' | 'pronunciation-showdown';
 
@@ -15,24 +16,33 @@ export default function GamePage() {
   const { user } = useAuth();
   const [userScore, setUserScore] = useState(0);
   const [gameMode, setGameMode] = useState<GameMode>('menu');
+  const [sessionStarted, setSessionStarted] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      const fetchScore = async () => {
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          setUserScore(userDoc.data().gameScore || 0);
-        } else {
-          // If the user has no doc, create one
-          await setDoc(userDocRef, { gameScore: 0 });
-          setUserScore(0);
-        }
-      };
+    if (!db || !user) return;
+    const fetchScore = async () => {
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        setUserScore(userDoc.data().gameScore || 0);
+      } else {
+        // If the user has no doc, create one
+        await setDoc(userDocRef, { gameScore: 0 });
+        setUserScore(0);
+      }
+    };
+    fetchScore();
+    // Reset session state when entering arcade
+    setSessionStarted(false);
+  }, [user, db]);
 
-      fetchScore();
+  // Call this when user starts their first game in this arcade session
+  const handleStartGameSession = async () => {
+    if (!sessionStarted && user) {
+      setSessionStarted(true);
+      await updateUserStreak(user.uid, { sessionType: 'arcade-session' });
     }
-  }, [user]);
+  };
 
   const handleScoreUpdate = (newScore: number) => {
     setUserScore(newScore);
@@ -41,10 +51,13 @@ export default function GamePage() {
   const renderGameMode = () => {
     switch (gameMode) {
       case 'phoneme-challenge':
+        handleStartGameSession();
         return <PhonemeChallenge onScoreUpdate={handleScoreUpdate} />;
       case 'listen-guess':
+        handleStartGameSession();
         return <ListenGuess onScoreUpdate={handleScoreUpdate} />;
       case 'pronunciation-showdown':
+        handleStartGameSession();
         return <PronunciationShowdown onScoreUpdate={handleScoreUpdate} />;
       default:
         return (

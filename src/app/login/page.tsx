@@ -54,20 +54,29 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
+    if (!auth) {
+      setError('Authentication service not available.');
+      setLoading(false);
+      return;
+    }
     try {
       await signInWithEmailAndPassword(auth, formData.email, formData.password);
       router.push('/dashboard');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      
-      if (error.code === 'auth/user-not-found') {
-        setError('No account found with this email address');
-      } else if (error.code === 'auth/wrong-password') {
-        setError('Incorrect password');
-      } else if (error.code === 'auth/invalid-email') {
-        setError('Please enter a valid email address');
-      } else if (error.code === 'auth/too-many-requests') {
-        setError('Too many failed attempts. Please try again later');
+      if (typeof error === 'object' && error !== null && 'code' in error) {
+        const code = (error as any).code;
+        if (code === 'auth/user-not-found') {
+          setError('No account found with this email address');
+        } else if (code === 'auth/wrong-password') {
+          setError('Incorrect password');
+        } else if (code === 'auth/invalid-email') {
+          setError('Please enter a valid email address');
+        } else if (code === 'auth/too-many-requests') {
+          setError('Too many failed attempts. Please try again later');
+        } else {
+          setError('Failed to sign in. Please check your credentials and try again.');
+        }
       } else {
         setError('Failed to sign in. Please check your credentials and try again.');
       }
@@ -94,6 +103,11 @@ export default function LoginPage() {
     }
     setAdminLoading(true);
     setAdminError('');
+    if (!db) {
+      setAdminError('Database not available.');
+      setAdminLoading(false);
+      return;
+    }
     try {
       // Query Firestore for admin credentials
       const adminsRef = collection(db, 'admins');

@@ -108,10 +108,12 @@ export default function ListenGuess({ onScoreUpdate }: { onScoreUpdate: (newScor
       setFeedback('incorrect');
     }
 
-    // Update streak for game completion
+    // The accuracy passed to updateUserStreak matches the feedback shown to the user.
+    // If you want to use a more granular score, replace 100/0 with the actual score here and in the UI.
     if (user && question) {
+      const accuracy = isCorrect ? 100 : 0; // Currently binary, but can be made granular
       await updateUserStreak(user.uid, {
-        accuracy: isCorrect ? 100 : 0,
+        accuracy,
         brandName: question.brand,
         sessionType: 'game'
       });
